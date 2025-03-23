@@ -83,9 +83,6 @@ serve(async (req) => {
         // 4. Generate shorts with subtitles
         // 5. Upload shorts back to Supabase Storage
         
-        // Simulate processing time (5 seconds)
-        await new Promise(resolve => setTimeout(resolve, 5000))
-        
         // Generate meaningful content for shorts based on video type
         let shortTopics = []
         
@@ -110,15 +107,43 @@ serve(async (req) => {
         const durations = ["00:45", "00:52", "00:38"]
         
         // Use the correct path format for storing in Supabase storage
-        // Store directly under the shorts bucket without a redundant "shorts/" prefix
-        const shortsData = shortTopics.map((topic, index) => ({
-          title: `${topic} - ${video.title.substring(0, 30)}${video.title.length > 30 ? '...' : ''}`,
-          duration: durations[index],
-          thumbnail_url: thumbnailUrl,
-          file_path: `${videoId}/short_${index + 1}.mp4`,  // Corrected path format
-          video_id: videoId,
-          views: 0
-        }))
+        const shortsData = []
+        
+        // Generate placeholder video content (in a real app, this would be actual video content)
+        for (let i = 0; i < shortTopics.length; i++) {
+          const shortTitle = `${shortTopics[i]} - ${video.title.substring(0, 30)}${video.title.length > 30 ? '...' : ''}`
+          const filePath = `${videoId}/short_${i + 1}.mp4`
+          
+          // Create a simple buffer with text data to simulate a video file
+          // In a real app, this would be actual video data
+          const encoder = new TextEncoder()
+          const videoData = encoder.encode(`This is a placeholder for the actual video content of "${shortTitle}"`)
+          
+          console.log(`Uploading short video to: ${filePath}`)
+          
+          // Upload the placeholder video to storage
+          const { error: uploadError } = await supabaseClient.storage
+            .from('shorts')
+            .upload(filePath, videoData, {
+              contentType: 'video/mp4',
+              upsert: true
+            })
+            
+          if (uploadError) {
+            console.error(`Error uploading short video: ${uploadError.message}`)
+            throw new Error(`Failed to upload short video: ${uploadError.message}`)
+          }
+          
+          // Add the short data to our array for database insertion
+          shortsData.push({
+            title: shortTitle,
+            duration: durations[i],
+            thumbnail_url: thumbnailUrl,
+            file_path: filePath,
+            video_id: videoId,
+            views: 0
+          })
+        }
         
         console.log(`Creating ${shortsData.length} shorts for video ID: ${videoId}`)
         
