@@ -71,30 +71,26 @@ export const VideoUpload = () => {
         source: "file"
       });
       
-      toast({
-        title: "Upload completed",
-        description: "Your video has been uploaded successfully!",
-        variant: "default",
+      toast("Upload completed", {
+        description: "Your video has been uploaded successfully!"
       });
     } catch (error) {
       console.error('Upload error:', error);
       setUploadStatus("error");
       setIsUploading(false);
       setErrorMessage(error instanceof Error ? error.message : "Unknown error occurred");
-      toast({
-        title: "Upload failed",
+      toast("Upload failed", {
         description: "There was an error uploading your video. Please try again.",
-        variant: "destructive",
+        variant: "destructive"
       });
     }
   };
 
   const handleYoutubeUpload = async () => {
     if (!youtubeUrl.trim()) {
-      toast({
-        title: "Invalid URL",
+      toast("Invalid URL", {
         description: "Please enter a valid YouTube URL",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
@@ -151,10 +147,8 @@ export const VideoUpload = () => {
           source: "youtube"
         });
         
-        toast({
-          title: "YouTube video added",
-          description: "Your YouTube video has been imported successfully!",
-          variant: "default",
+        toast("YouTube video added", {
+          description: "Your YouTube video has been imported successfully!"
         });
       }, 1000);
     } catch (error) {
@@ -162,10 +156,9 @@ export const VideoUpload = () => {
       setUploadStatus("error");
       setIsUploading(false);
       setErrorMessage(error instanceof Error ? error.message : "Unknown error occurred");
-      toast({
-        title: "Import failed",
+      toast("Import failed", {
         description: "Failed to import YouTube video. Please check the URL and try again.",
-        variant: "destructive",
+        variant: "destructive"
       });
     }
   };
@@ -173,10 +166,8 @@ export const VideoUpload = () => {
   const handleStartProcessing = async () => {
     if (!uploadedVideo) return;
     
-    toast({
-      title: "Processing started",
-      description: "Video processing started. You'll be notified when shorts are ready.",
-      variant: "default",
+    toast("Processing started", {
+      description: "Video processing started. You'll be notified when shorts are ready."
     });
     navigate('/dashboard');
   };

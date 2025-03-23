@@ -1,24 +1,20 @@
 
-import { toast as sonnerToast } from "sonner";
-import { type ToastProps } from "@/components/ui/toast";
+import { toast as sonnerToast, type Toast } from "sonner";
 
-type ToastActionElement = React.ReactElement;
-
-type ToastOptions = {
-  description?: string;
-  action?: ToastActionElement;
-  variant?: "default" | "destructive";
-};
-
-// These are wrappers around the toast functions to provide a consistent API
+// We need to modify our toast API to match Sonner's expectations
 const useToast = () => {
   return {
-    toast: ({ title, description, action, ...props }: ToastProps & { title: string }) => {
-      sonnerToast(title, {
-        description,
-        action,
-        ...props,
-      });
+    toast: (props: { title: string; description?: string; variant?: "default" | "destructive" }) => {
+      // Map our custom props to Sonner's expected format
+      if (props.variant === "destructive") {
+        sonnerToast.error(props.title, {
+          description: props.description,
+        });
+      } else {
+        sonnerToast(props.title, {
+          description: props.description,
+        });
+      }
     },
     
     toasts: [] // This is required for compatibility with existing components
@@ -26,41 +22,40 @@ const useToast = () => {
 };
 
 // Direct toast function for ease of use
-const toast = (options: ToastProps & { title: string }) => {
-  sonnerToast(options.title, {
-    description: options.description,
-    action: options.action,
-    variant: options.variant
-  });
+const toast = (title: string, options?: { description?: string; variant?: "default" | "destructive" }) => {
+  if (options?.variant === "destructive") {
+    sonnerToast.error(title, {
+      description: options?.description,
+    });
+  } else {
+    sonnerToast(title, {
+      description: options?.description,
+    });
+  }
 };
 
 // Add these additional convenience methods for backward compatibility
-toast.info = (title: string, options?: ToastOptions) => {
-  sonnerToast(title, {
+toast.info = (title: string, options?: { description?: string }) => {
+  sonnerToast.info(title, {
     description: options?.description,
-    action: options?.action,
   });
 };
 
-toast.error = (title: string, options?: ToastOptions) => {
+toast.error = (title: string, options?: { description?: string }) => {
   sonnerToast.error(title, {
     description: options?.description,
-    action: options?.action,
   });
 };
 
-toast.success = (title: string, options?: ToastOptions) => {
+toast.success = (title: string, options?: { description?: string }) => {
   sonnerToast.success(title, {
     description: options?.description,
-    action: options?.action,
   });
 };
 
-toast.warning = (title: string, options?: ToastOptions) => {
-  sonnerToast(title, {
+toast.warning = (title: string, options?: { description?: string }) => {
+  sonnerToast.warning(title, {
     description: options?.description,
-    action: options?.action,
-    variant: "destructive",
   });
 };
 

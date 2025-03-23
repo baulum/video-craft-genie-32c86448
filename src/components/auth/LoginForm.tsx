@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -49,16 +48,18 @@ export function LoginForm() {
       
       // For demonstration purposes, let's simulate success
       // In a real app, you would handle the API response here
-      toast("Login successful", {
-        description: "Redirecting to your dashboard",
+      toast({
+        title: "Login successful",
+        description: "Redirecting to your dashboard"
       });
       
       // Redirect to dashboard (would be implemented in a real app)
       navigate("/");
     } catch (error) {
-      toast("Login failed", {
+      toast({
+        title: "Login failed",
         description: "Please check your credentials and try again",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);

@@ -49,13 +49,15 @@ export function ForgotPasswordForm({ onCancel }: ForgotPasswordFormProps) {
       // For demonstration, show success state
       setIsSuccess(true);
       
-      toast("Reset link sent", {
-        description: "Check your email for password reset instructions",
+      toast({
+        title: "Reset link sent",
+        description: "Check your email for password reset instructions"
       });
     } catch (error) {
-      toast("Failed to send reset link", {
+      toast({
+        title: "Failed to send reset link",
         description: "Please try again later",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);

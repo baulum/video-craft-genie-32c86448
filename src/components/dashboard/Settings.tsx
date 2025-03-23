@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -47,7 +46,7 @@ export const Settings = () => {
     setIsLoading(false);
     
     toast("Settings updated", {
-      description: `Your ${section} settings have been saved.`,
+      description: `Your ${section} settings have been saved.`
     });
   };
 

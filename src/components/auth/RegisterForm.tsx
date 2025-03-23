@@ -62,15 +62,17 @@ export function RegisterForm() {
       console.log("Registration data:", data);
       
       // For demonstration, redirect to verify email page
-      toast("Registration successful", {
-        description: "Please check your email to verify your account",
+      toast({
+        title: "Registration successful",
+        description: "Please check your email to verify your account"
       });
       
       navigate(`/verify-email?email=${encodeURIComponent(data.email)}`);
     } catch (error) {
-      toast("Registration failed", {
+      toast({
+        title: "Registration failed",
         description: "There was a problem creating your account",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);
