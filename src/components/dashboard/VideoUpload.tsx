@@ -3,20 +3,27 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Upload, Link as LinkIcon, Youtube } from "lucide-react";
+import { Upload, Link as LinkIcon, Youtube, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { VideoPreview } from "@/components/dashboard/VideoPreview";
 
 export const VideoUpload = () => {
   const [uploadMethod, setUploadMethod] = useState<"file" | "url" | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [uploadedVideo, setUploadedVideo] = useState<{
+    url: string;
+    title: string;
+    source: "file" | "youtube";
+  } | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    simulateUpload(file.name);
+    simulateUpload(file.name, "file");
   };
 
   const handleYoutubeUpload = () => {
@@ -25,13 +32,14 @@ export const VideoUpload = () => {
       return;
     }
 
-    simulateUpload(youtubeUrl);
+    simulateUpload(youtubeUrl, "youtube");
   };
 
   // Simulate file upload with progress
-  const simulateUpload = (fileName: string) => {
+  const simulateUpload = (fileName: string, source: "file" | "youtube") => {
     setIsUploading(true);
     setUploadProgress(0);
+    setUploadStatus("uploading");
 
     const interval = setInterval(() => {
       setUploadProgress(prev => {
@@ -39,6 +47,19 @@ export const VideoUpload = () => {
         if (newProgress >= 100) {
           clearInterval(interval);
           setIsUploading(false);
+          setUploadStatus("success");
+          
+          // Create a demo video object
+          setUploadedVideo({
+            url: source === "file" 
+              ? URL.createObjectURL(new Blob()) // This would be replaced with the actual blob URL in a real app
+              : "https://www.youtube.com/embed/" + youtubeUrl.split("v=")[1]?.split("&")[0],
+            title: source === "file" 
+              ? fileName 
+              : "YouTube Video: " + youtubeUrl,
+            source
+          });
+          
           toast.success("Upload completed successfully!");
           return 100;
         }
@@ -46,6 +67,32 @@ export const VideoUpload = () => {
       });
     }, 500);
   };
+
+  const handleStartProcessing = () => {
+    if (!uploadedVideo) return;
+    
+    toast.success("Video processing started. You'll be notified when shorts are ready.");
+    // In a real app, this would trigger the backend processing
+  };
+
+  // Reset the upload state to start a new upload
+  const handleNewUpload = () => {
+    setUploadStatus("idle");
+    setUploadedVideo(null);
+    setUploadProgress(0);
+    setYoutubeUrl("");
+  };
+
+  // Show video preview if upload is successful
+  if (uploadStatus === "success" && uploadedVideo) {
+    return (
+      <VideoPreview 
+        video={uploadedVideo}
+        onStartProcessing={handleStartProcessing}
+        onNewUpload={handleNewUpload}
+      />
+    );
+  }
 
   return (
     <div className="grid gap-6">

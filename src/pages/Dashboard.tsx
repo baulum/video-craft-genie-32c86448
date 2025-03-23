@@ -32,6 +32,7 @@ import { Link, Navigate } from "react-router-dom";
 import { VideoUpload } from "@/components/dashboard/VideoUpload";
 import { VideoList } from "@/components/dashboard/VideoList";
 import { VideoStats } from "@/components/dashboard/VideoStats";
+import { ShortsGallery } from "@/components/dashboard/ShortsGallery";
 
 // Mock authentication check - this would be replaced with a real auth check
 const isAuthenticated = true; // Replace with actual auth state
@@ -155,7 +156,7 @@ const Dashboard = () => {
                     <Search className="h-4 w-4 mr-2" />
                     Search
                   </Button>
-                  <Button size="sm">
+                  <Button size="sm" onClick={() => setActiveTab("upload")}>
                     <Plus className="h-4 w-4 mr-2" />
                     New Video
                   </Button>
@@ -172,21 +173,7 @@ const Dashboard = () => {
               </TabsContent>
               
               <TabsContent value="shorts">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                  <h2 className="text-2xl font-bold mb-4">Your Shorts</h2>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    Any shorts you generate from your videos will appear here.
-                  </p>
-                  <div className="mt-8 flex justify-center">
-                    <div className="text-center max-w-md">
-                      <Film className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-lg font-medium">No shorts yet</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Upload a video and use the "Generate Shorts" feature to create short clips.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <ShortsGallery />
               </TabsContent>
               
               <TabsContent value="history">
