@@ -36,7 +36,7 @@ import { VideoStats } from "@/components/dashboard/VideoStats";
 import { ShortsGallery } from "@/components/dashboard/ShortsGallery";
 import { Profile } from "@/components/dashboard/Profile";
 import { Settings as SettingsComponent } from "@/components/dashboard/Settings";
-import { useToast } from "@/hooks/use-toast";
+import { showToast } from "@/utils/toast-helper";
 import { Toaster } from "sonner";
 
 // Mock authentication check - this would be replaced with a real auth check
@@ -49,7 +49,6 @@ const Dashboard = () => {
   const tabFromQuery = searchParams.get('tab');
   
   const [activeTab, setActiveTab] = useState(tabFromQuery || "videos");
-  const { toast } = useToast();
 
   // Update URL when tab changes
   useEffect(() => {
@@ -79,7 +78,7 @@ const Dashboard = () => {
       
       // Only show toast for relevant errors (avoid spamming the user)
       if (errorMessage && !errorMessage.includes('solana') && !errorMessage.includes('provider.js')) {
-        toast.error("An error occurred. Please try again or contact support if the issue persists.");
+        showToast.error("An error occurred", "Please try again or contact support if the issue persists.");
       }
     };
     
@@ -102,7 +101,7 @@ const Dashboard = () => {
       console.error = originalError;
       window.removeEventListener('error', handleWalletError);
     };
-  }, [toast]);
+  }, []);
 
   // Redirect if not authenticated
   if (!isAuthenticated) {

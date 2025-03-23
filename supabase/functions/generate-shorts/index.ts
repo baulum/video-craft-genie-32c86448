@@ -36,8 +36,12 @@ async function createVideoSegment(videoId, segmentData, supabaseClient) {
     // Generate a video file with proper MP4 structure and duration
     const videoBuffer = createActualMP4(segmentDuration);
     
+    // Generate a thumbnail for the video - a simple colored frame with the title
+    const thumbnailDataUrl = generateThumbnail(segmentData.title);
+    
     return {
       videoBuffer,
+      thumbnailBuffer: dataURLtoBuffer(thumbnailDataUrl),
       metadata: {
         title: segmentData.title,
         description: segmentData.description,
@@ -49,6 +53,24 @@ async function createVideoSegment(videoId, segmentData, supabaseClient) {
     console.error(`Error creating video segment:`, error);
     throw error;
   }
+}
+
+// Function to generate a thumbnail image as a data URL
+function generateThumbnail(title) {
+  // Create a colored background with the title text
+  const svg = `<svg width="640" height="1136" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100%" height="100%" fill="#3651C8"/>
+    <text x="50%" y="50%" font-size="32" text-anchor="middle" alignment-baseline="middle" fill="#ffffff">${title}</text>
+  </svg>`;
+  
+  // Convert SVG to a base64 data URL
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
+}
+
+// Function to convert a data URL to a buffer
+function dataURLtoBuffer(dataUrl) {
+  const base64 = dataUrl.split(',')[1];
+  return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 }
 
 // Function to create an actual MP4 file with real video structure
@@ -385,10 +407,6 @@ serve(async (req) => {
           // Continue as the bucket might exist despite the error
         }
         
-        // Use video thumbnail or generate a placeholder
-        const thumbnailUrl = video.thumbnail_url || 
-          `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjM2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjNTU1NTU1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMjQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGFsaWdubWVudC1iYXNlbGluZT0ibWlkZGxlIiBmaWxsPSIjZmZmZmZmIj4ke3ZpZGVvLnRpdGxlfTwvdGV4dD48L3N2Zz4=`;
-        
         // Process each segment and create shorts
         const shortsData = [];
         
@@ -396,32 +414,51 @@ serve(async (req) => {
           const segment = videoSegments[i];
           console.log(`Processing segment ${i+1}: ${segment.title}`);
           
-          // Generate file path for this short
-          const filePath = `${videoId}/short_${i + 1}.mp4`;
+          // Generate file paths for this short
+          const videoFilePath = `${videoId}/short_${i + 1}.mp4`;
+          const thumbnailFilePath = `${videoId}/thumb_${i + 1}.png`;
           
-          // Create actual video segment from the original
-          const { videoBuffer, metadata } = await createVideoSegment(videoId, segment, supabaseClient);
+          // Create actual video segment and thumbnail from the original
+          const { videoBuffer, thumbnailBuffer, metadata } = await createVideoSegment(videoId, segment, supabaseClient);
           
-          console.log(`Uploading segment "${metadata.title}" to ${filePath}`);
+          console.log(`Uploading segment "${metadata.title}" to ${videoFilePath}`);
           
-          // Upload to storage
-          const { error: uploadError } = await supabaseClient.storage
+          // Upload video to storage
+          const { error: uploadVideoError } = await supabaseClient.storage
             .from('shorts')
-            .upload(filePath, videoBuffer, {
+            .upload(videoFilePath, videoBuffer, {
               contentType: 'video/mp4',
               cacheControl: '3600',
               upsert: true
             });
             
-          if (uploadError) {
-            console.error(`Error uploading short video:`, uploadError);
-            throw new Error(`Failed to upload short video: ${uploadError.message}`);
+          if (uploadVideoError) {
+            console.error(`Error uploading short video:`, uploadVideoError);
+            throw new Error(`Failed to upload short video: ${uploadVideoError.message}`);
           }
           
-          // Get public URL for the uploaded short
-          const { data: { publicUrl } } = supabaseClient.storage
+          // Upload thumbnail to storage
+          const { error: uploadThumbError } = await supabaseClient.storage
             .from('shorts')
-            .getPublicUrl(filePath);
+            .upload(thumbnailFilePath, thumbnailBuffer, {
+              contentType: 'image/png',
+              cacheControl: '3600',
+              upsert: true
+            });
+            
+          if (uploadThumbError) {
+            console.error(`Error uploading thumbnail:`, uploadThumbError);
+            // Continue even if thumbnail upload fails
+          }
+          
+          // Get public URLs for the uploaded files
+          const { data: { publicUrl: videoUrl } } = supabaseClient.storage
+            .from('shorts')
+            .getPublicUrl(videoFilePath);
+            
+          const { data: { publicUrl: thumbnailUrl } } = supabaseClient.storage
+            .from('shorts')
+            .getPublicUrl(thumbnailFilePath);
           
           // Add to shorts data for database
           shortsData.push({
@@ -430,10 +467,10 @@ serve(async (req) => {
             duration: metadata.duration,
             timestamp: metadata.timestamp,
             thumbnail_url: thumbnailUrl,
-            file_path: filePath,
+            file_path: videoFilePath,
             video_id: videoId,
             views: 0,
-            url: publicUrl
+            url: videoUrl
           });
         }
         

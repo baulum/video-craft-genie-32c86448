@@ -105,20 +105,31 @@ export const ShortsGallery = () => {
         return;
       }
 
-      // Get a signed URL that expires after a short time
-      const { data, error } = await supabase.storage
-        .from('shorts')
-        .createSignedUrl(short.file_path, 60); // 60 seconds expiry
-
-      if (error) throw error;
+      console.log("Attempting to download file from path:", short.file_path);
       
-      if (!data.signedUrl) {
-        throw new Error("Failed to generate download URL");
+      // Check if the file exists first
+      const { data: fileExists, error: checkError } = await supabase.storage
+        .from('shorts')
+        .list(short.file_path.split('/')[0]);
+        
+      if (checkError) {
+        console.error("Error checking if file exists:", checkError);
+        throw new Error("Could not verify file exists");
+      }
+      
+      const filename = short.file_path.split('/').pop();
+      if (!fileExists.some(f => f.name === filename)) {
+        throw new Error("File does not exist in storage");
       }
 
+      // Get a public URL for the file
+      const { data: publicUrlData } = supabase.storage
+        .from('shorts')
+        .getPublicUrl(short.file_path);
+        
       // Create a hidden anchor and trigger download
       const a = document.createElement('a');
-      a.href = data.signedUrl;
+      a.href = publicUrlData.publicUrl;
       a.download = `${short.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
       document.body.appendChild(a);
       a.click();
@@ -269,6 +280,10 @@ interface ShortCardProps {
 }
 
 const ShortCard = ({ short, isPlaying, onPlayPause, onDelete, onDownload, onShare }: ShortCardProps) => {
+  // Generate a fallback thumbnail if none is provided
+  const thumbnailUrl = short.thumbnail_url || 
+    `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjExMzYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzU1NTU1NSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBhbGlnbm1lbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI2ZmZmZmZiI+JHtzaG9ydC50aXRsZX08L3RleHQ+PC9zdmc+`;
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="p-4 pb-2">
@@ -282,16 +297,24 @@ const ShortCard = ({ short, isPlaying, onPlayPause, onDelete, onDownload, onShar
             src={short.url}
             autoPlay
             controls
+            onError={(e) => {
+              console.error("Video playback error:", e);
+              showToast.error("Playback Error", "Could not play this short. The video may be missing or corrupted.");
+            }}
           />
         ) : (
           <div className="relative w-full h-full flex items-center justify-center">
-            {short.thumbnail_url && (
-              <img 
-                src={short.thumbnail_url} 
-                alt={short.title}
-                className="w-full h-full object-cover absolute inset-0"
-              />
-            )}
+            <img 
+              src={thumbnailUrl} 
+              alt={short.title}
+              className="w-full h-full object-cover absolute inset-0"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                // Set a colored background with text as fallback
+                target.onerror = null; // Prevent infinite error loop
+                target.src = `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjExMzYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzM2NTFDOCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBhbGlnbm1lbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI2ZmZmZmZiI+JHtzaG9ydC50aXRsZX08L3RleHQ+PC9zdmc+`;
+              }}
+            />
             <Button 
               onClick={onPlayPause}
               size="lg" 
