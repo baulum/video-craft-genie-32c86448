@@ -19,9 +19,38 @@ serve(async (req) => {
     // Get the request body
     const { videoId, youtubeUrl } = await req.json()
     
-    if (!videoId || !youtubeUrl) {
+    // Validate input
+    if (!videoId) {
       return new Response(
-        JSON.stringify({ error: 'videoId and youtubeUrl are required' }),
+        JSON.stringify({ error: 'videoId is required' }),
+        { 
+          status: 400, 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          } 
+        }
+      )
+    }
+
+    if (!youtubeUrl) {
+      return new Response(
+        JSON.stringify({ error: 'youtubeUrl is required' }),
+        { 
+          status: 400, 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          } 
+        }
+      )
+    }
+
+    // Validate YouTube URL format
+    const videoIdFromUrl = getYoutubeVideoId(youtubeUrl)
+    if (!videoIdFromUrl) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid YouTube URL format' }),
         { 
           status: 400, 
           headers: { 
@@ -39,6 +68,33 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     )
 
+    // Check if video exists
+    const { data: existingVideo, error: checkError } = await supabaseClient
+      .from('videos')
+      .select('*')
+      .eq('id', videoId)
+      .single()
+
+    if (checkError) {
+      console.error('Error checking video existence:', checkError.message)
+      if (checkError.code !== 'PGRST116') { // PGRST116 is "not found" error
+        throw checkError
+      }
+    }
+
+    if (!existingVideo) {
+      return new Response(
+        JSON.stringify({ error: 'Video not found in database' }),
+        { 
+          status: 404, 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          } 
+        }
+      )
+    }
+
     // Update video status to downloading
     const { error: updateError } = await supabaseClient
       .from('videos')
@@ -46,6 +102,7 @@ serve(async (req) => {
       .eq('id', videoId)
 
     if (updateError) {
+      console.error('Error updating video status:', updateError.message)
       throw updateError
     }
 
@@ -58,13 +115,17 @@ serve(async (req) => {
         // But since we can't install external libraries in Edge Functions easily,
         // we'll simulate the download
 
-        // Simulate video processing time (10 seconds)
-        await new Promise(resolve => setTimeout(resolve, 10000))
+        // Simulate video processing time (5 seconds instead of 10 for faster feedback)
+        await new Promise(resolve => setTimeout(resolve, 5000))
+        
+        // Generate YouTube thumbnail URL
+        const videoIdFromUrl = getYoutubeVideoId(youtubeUrl)
+        const thumbnailUrl = videoIdFromUrl 
+          ? `https://img.youtube.com/vi/${videoIdFromUrl}/maxresdefault.jpg` 
+          : null
         
         // Update video info after "download"
-        const thumbnailUrl = `https://img.youtube.com/vi/${getYoutubeVideoId(youtubeUrl)}/maxresdefault.jpg`
-        
-        await supabaseClient
+        const { error: finalUpdateError } = await supabaseClient
           .from('videos')
           .update({
             status: 'complete',
@@ -74,6 +135,11 @@ serve(async (req) => {
           })
           .eq('id', videoId)
           
+        if (finalUpdateError) {
+          console.error(`Error updating video after download: ${finalUpdateError.message}`)
+          throw finalUpdateError
+        }
+        
         console.log(`Download complete for video ID: ${videoId}`)
       } catch (error) {
         console.error(`Error in background task: ${error.message}`)
@@ -81,7 +147,11 @@ serve(async (req) => {
         // Update video status to error
         await supabaseClient
           .from('videos')
-          .update({ status: 'error' })
+          .update({ 
+            status: 'error',
+            // Store error message for debugging
+            title: `Error: ${error.message} (${existingVideo.title})`
+          })
           .eq('id', videoId)
       }
     }
@@ -93,7 +163,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true,
-        message: 'YouTube download started in the background'
+        message: 'YouTube download started in the background',
+        videoId: videoId,
+        thumbnailUrl: existingVideo.thumbnail_url || `https://img.youtube.com/vi/${videoIdFromUrl}/maxresdefault.jpg`
       }),
       { 
         status: 200, 
@@ -104,9 +176,12 @@ serve(async (req) => {
       }
     )
   } catch (error) {
-    console.error(`Error: ${error.message}`)
+    console.error(`Error processing request: ${error.message}`)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: 'An error occurred while processing your request'
+      }),
       { 
         status: 500, 
         headers: { 
@@ -120,7 +195,32 @@ serve(async (req) => {
 
 // Helper function to extract YouTube video ID from URL
 function getYoutubeVideoId(url: string): string {
-  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/
-  const match = url.match(regExp)
-  return (match && match[7].length === 11) ? match[7] : ''
+  if (!url) return ''
+  
+  // Handle multiple YouTube URL formats
+  const regexes = [
+    /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/,
+    /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/
+  ]
+  
+  for (const regex of regexes) {
+    const match = url.match(regex)
+    if (match && match[7] && match[7].length === 11) {
+      return match[7]
+    }
+  }
+  
+  // Try to extract from youtube.com/embed/VIDEO_ID format
+  const embedMatch = url.match(/embed\/([^\/\?]+)/)
+  if (embedMatch && embedMatch[1]) {
+    return embedMatch[1]
+  }
+  
+  // Try to extract from youtu.be/VIDEO_ID format
+  const shortMatch = url.match(/youtu\.be\/([^\/\?]+)/)
+  if (shortMatch && shortMatch[1]) {
+    return shortMatch[1]
+  }
+  
+  return ''
 }

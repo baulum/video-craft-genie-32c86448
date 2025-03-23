@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Upload, Link as LinkIcon, Youtube, CheckCircle, AlertCircle } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { VideoPreview } from "@/components/dashboard/VideoPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { VideoInsert } from "@/types/supabase";
 import { useNavigate } from "react-router-dom";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const VideoUpload = () => {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export const VideoUpload = () => {
     source: "file" | "youtube";
   } | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -30,6 +32,7 @@ export const VideoUpload = () => {
     setIsUploading(true);
     setUploadProgress(0);
     setUploadStatus("uploading");
+    setErrorMessage(null);
 
     try {
       // Simulate upload progress
@@ -70,24 +73,38 @@ export const VideoUpload = () => {
         source: "file"
       });
       
-      toast.success("Upload completed successfully!");
+      toast({
+        title: "Upload completed",
+        description: "Your video has been uploaded successfully!",
+        variant: "default",
+      });
     } catch (error) {
       console.error('Upload error:', error);
       setUploadStatus("error");
       setIsUploading(false);
-      toast.error("Upload failed. Please try again.");
+      setErrorMessage(error instanceof Error ? error.message : "Unknown error occurred");
+      toast({
+        title: "Upload failed",
+        description: "There was an error uploading your video. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   const handleYoutubeUpload = async () => {
     if (!youtubeUrl.trim()) {
-      toast.error("Please enter a valid YouTube URL");
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid YouTube URL",
+        variant: "destructive",
+      });
       return;
     }
 
     setIsUploading(true);
     setUploadProgress(0);
     setUploadStatus("uploading");
+    setErrorMessage(null);
 
     try {
       // Create video record in database
@@ -102,7 +119,16 @@ export const VideoUpload = () => {
         .select()
         .single();
 
-      if (videoError) throw videoError;
+      if (videoError) {
+        throw new Error(`Database error: ${videoError.message}`);
+      }
+
+      if (!videoData) {
+        throw new Error("Failed to create video record");
+      }
+
+      // Set initial progress
+      setUploadProgress(30);
 
       // Call the Edge Function to start YouTube download
       const { data, error } = await supabase.functions.invoke('download-youtube', {
@@ -112,41 +138,53 @@ export const VideoUpload = () => {
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        throw new Error(`Function error: ${error.message}`);
+      }
 
-      // Simulate progress for UX
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
-        setUploadProgress(progress);
+      // Update progress based on response
+      setUploadProgress(70);
+
+      // Simulate final progress steps for better UX
+      setTimeout(() => {
+        setUploadProgress(100);
+        setIsUploading(false);
+        setUploadStatus("success");
         
-        if (progress >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          setUploadStatus("success");
-          
-          // Create a demo video object for preview
-          setUploadedVideo({
-            url: youtubeUrl,
-            title: videoData.title || `YouTube Video: ${youtubeUrl}`,
-            source: "youtube"
-          });
-          
-          toast.success("YouTube video added successfully!");
-        }
-      }, 500);
+        // Create a demo video object for preview
+        setUploadedVideo({
+          url: youtubeUrl,
+          title: videoData.title || `YouTube Video: ${youtubeUrl}`,
+          source: "youtube"
+        });
+        
+        toast({
+          title: "YouTube video added",
+          description: "Your YouTube video has been imported successfully!",
+          variant: "default",
+        });
+      }, 1000);
     } catch (error) {
       console.error('YouTube import error:', error);
       setUploadStatus("error");
       setIsUploading(false);
-      toast.error("Failed to import YouTube video. Please try again.");
+      setErrorMessage(error instanceof Error ? error.message : "Unknown error occurred");
+      toast({
+        title: "Import failed",
+        description: "Failed to import YouTube video. Please check the URL and try again.",
+        variant: "destructive",
+      });
     }
   };
 
   const handleStartProcessing = async () => {
     if (!uploadedVideo) return;
     
-    toast.success("Video processing started. You'll be notified when shorts are ready.");
+    toast({
+      title: "Processing started",
+      description: "Video processing started. You'll be notified when shorts are ready.",
+      variant: "default",
+    });
     // In a real app, this would call a function to process the video
     navigate('/dashboard');
   };
@@ -157,6 +195,7 @@ export const VideoUpload = () => {
     setUploadedVideo(null);
     setUploadProgress(0);
     setYoutubeUrl("");
+    setErrorMessage(null);
   };
 
   // Show video preview if upload is successful
@@ -172,6 +211,15 @@ export const VideoUpload = () => {
 
   return (
     <div className="grid gap-6">
+      {errorMessage && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {errorMessage}
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className={`border-2 transition-all ${uploadMethod === "file" ? "border-primary" : "border-gray-200 dark:border-gray-800"}`} onClick={() => setUploadMethod("file")}>
           <CardHeader>
@@ -249,8 +297,21 @@ export const VideoUpload = () => {
       {isUploading && (
         <Card>
           <CardHeader>
-            <CardTitle>Uploading...</CardTitle>
-            <CardDescription>Your video is being uploaded. Please don't close this window.</CardDescription>
+            <CardTitle>
+              {uploadStatus === "uploading" ? (
+                "Uploading..."
+              ) : (
+                uploadStatus === "error" ? "Upload Failed" : "Upload Complete"
+              )}
+            </CardTitle>
+            <CardDescription>
+              {uploadStatus === "uploading" 
+                ? "Your video is being uploaded. Please don't close this window."
+                : uploadStatus === "error"
+                  ? "There was an error uploading your video."
+                  : "Your video has been uploaded successfully."
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Progress value={uploadProgress} className="h-2" />
@@ -258,7 +319,12 @@ export const VideoUpload = () => {
           </CardContent>
           <CardFooter>
             <p className="text-sm text-gray-500">
-              After upload completes, we'll process your video for shorts generation.
+              {uploadStatus === "uploading" 
+                ? "After upload completes, we'll process your video for shorts generation."
+                : uploadStatus === "error"
+                  ? "Please try again or contact support if the problem persists."
+                  : "You can now use this video to generate shorts."
+              }
             </p>
           </CardFooter>
         </Card>
