@@ -20,6 +20,7 @@ export type Database = {
           timestamp: string | null
           title: string
           updated_at: string | null
+          url: string | null
           video_id: string | null
           views: number | null
         }
@@ -33,6 +34,7 @@ export type Database = {
           timestamp?: string | null
           title: string
           updated_at?: string | null
+          url?: string | null
           video_id?: string | null
           views?: number | null
         }
@@ -46,6 +48,7 @@ export type Database = {
           timestamp?: string | null
           title?: string
           updated_at?: string | null
+          url?: string | null
           video_id?: string | null
           views?: number | null
         }

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,41 +7,143 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "@/hooks/use-toast";
 import { Upload, CheckCircle, User } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [profile, setProfile] = useState({
     name: "John Doe",
     email: "john.doe@example.com",
     username: "johndoe",
     bio: "ClipFarm user creating awesome video shorts.",
     avatarUrl: "",
+    plan: "free"
   });
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      // In a real app with auth, you would use auth.user.id
+      // For demo, we'll just show mock data
+      const { data: userProfile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      if (userProfile) {
+        setProfile({
+          ...profile,
+          ...userProfile,
+          name: userProfile.full_name || profile.name,
+          avatarUrl: userProfile.avatar_url || profile.avatarUrl
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    }
+  };
 
   const handleSave = async () => {
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setIsLoading(false);
-    setIsEditing(false);
-    
-    toast("Profile updated", {
-      description: "Your profile has been successfully updated.",
-    });
+    try {
+      // Upload avatar if selected
+      let avatarUrl = profile.avatarUrl;
+      
+      if (avatarFile) {
+        const fileExt = avatarFile.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+        const filePath = `avatars/${fileName}`;
+        
+        // Check if user_avatars bucket exists, create if not
+        const { data: buckets } = await supabase.storage.listBuckets();
+        const bucketExists = buckets?.some(bucket => bucket.name === 'user_avatars');
+        
+        if (!bucketExists) {
+          await supabase.storage.createBucket('user_avatars', {
+            public: true
+          });
+        }
+        
+        const { error: uploadError } = await supabase.storage
+          .from('user_avatars')
+          .upload(filePath, avatarFile);
+          
+        if (uploadError) throw uploadError;
+        
+        const { data } = supabase.storage
+          .from('user_avatars')
+          .getPublicUrl(filePath);
+          
+        avatarUrl = data.publicUrl;
+      }
+      
+      // In a real app with auth, you would use auth.user.id
+      // Here's a demo update that will work even without auth
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          // id: auth.user.id (in a real app),
+          full_name: profile.name,
+          username: profile.username,
+          bio: profile.bio,
+          avatar_url: avatarUrl,
+          plan: profile.plan,
+          updated_at: new Date()
+        });
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been successfully updated.",
+      });
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast({
+        title: "Update failed",
+        description: "There was an error updating your profile. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+      setIsEditing(false);
+    }
   };
 
   const handleCancel = () => {
     setIsEditing(false);
+    // Reset any changes
+    fetchProfile();
   };
 
   const handleUploadAvatar = () => {
-    // In a real app, this would open a file picker and upload the image
-    toast("Feature coming soon", {
-      description: "Avatar upload will be available soon!",
-    });
+    // Create an input element to handle file selection
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        setAvatarFile(file);
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setProfile({...profile, avatarUrl: e.target?.result as string});
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
   };
 
   return (
@@ -64,6 +166,7 @@ export const Profile = () => {
               size="sm" 
               className="px-4"
               onClick={handleUploadAvatar}
+              disabled={!isEditing}
             >
               <Upload className="h-4 w-4 mr-2" />
               Upload Photo
@@ -101,12 +204,32 @@ export const Profile = () => {
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="bio">Bio</Label>
-              <Input 
+              <Textarea 
                 id="bio" 
                 value={profile.bio} 
                 onChange={(e) => setProfile({...profile, bio: e.target.value})}
                 disabled={!isEditing}
+                className="resize-none"
+                rows={3}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="plan">Subscription Plan</Label>
+              <Select 
+                disabled={!isEditing} 
+                value={profile.plan} 
+                onValueChange={(value) => setProfile({...profile, plan: value})}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select your plan" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="starter">Starter</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="enterprise">Enterprise</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>

@@ -319,6 +319,22 @@ serve(async (req) => {
           
           console.log(`Uploading short video to: ${filePath} (title: ${shortTitle}, duration: ${duration})`);
           
+          // Make sure the 'videos' bucket exists
+          try {
+            const { data: buckets } = await supabaseClient.storage.listBuckets();
+            const videosBucketExists = buckets?.some(bucket => bucket.name === 'videos');
+            
+            if (!videosBucketExists) {
+              console.log('Creating videos bucket...');
+              await supabaseClient.storage.createBucket('videos', {
+                public: true,
+                fileSizeLimit: 104857600 // 100MB limit
+              });
+            }
+          } catch (bucketError) {
+            console.error('Error checking/creating videos bucket:', bucketError);
+          }
+          
           // Upload to storage
           const { error: uploadError } = await supabaseClient.storage
             .from('shorts')
@@ -344,7 +360,7 @@ serve(async (req) => {
             title: shortTitle,
             description: segment.description || "No description provided", 
             duration: duration,
-            timestamp: segment.timestamp,  // Using the timestamp field we just added
+            timestamp: segment.timestamp,
             thumbnail_url: thumbnailUrl,
             file_path: filePath,
             video_id: videoId,

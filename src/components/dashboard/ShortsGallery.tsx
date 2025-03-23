@@ -4,14 +4,26 @@ import { supabase } from "@/integrations/supabase/client";
 import { Short } from "@/types/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Scissors, Download, Share2, ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { Scissors, Download, Share2, ExternalLink, Loader2, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export const ShortsGallery = () => {
   const [shorts, setShorts] = useState<Short[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     loadShorts();
@@ -29,7 +41,6 @@ export const ShortsGallery = () => {
         toast({
           title: "New Short Ready",
           description: "A new short video has been generated and is ready to view!",
-          variant: "default",
         });
       })
       .subscribe();
@@ -42,6 +53,8 @@ export const ShortsGallery = () => {
   const loadShorts = async () => {
     try {
       setLoading(true);
+      console.log("Fetching shorts from Supabase...");
+      
       const { data, error } = await supabase
         .from('shorts')
         .select(`
@@ -53,7 +66,12 @@ export const ShortsGallery = () => {
         `)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error loading shorts:", error);
+        throw error;
+      }
+      
+      console.log(`Successfully loaded ${data?.length || 0} shorts`);
       setShorts(data || []);
     } catch (error) {
       console.error('Error loading shorts:', error);
@@ -106,7 +124,6 @@ export const ShortsGallery = () => {
         toast({
           title: "Using Demo Video",
           description: "The actual file doesn't exist in storage yet. Using a placeholder video instead.",
-          variant: "default",
         });
         return;
       }
@@ -132,7 +149,6 @@ export const ShortsGallery = () => {
       toast({
         title: "Download Started",
         description: "Your short video download has started!",
-        variant: "default",
       });
     } catch (error) {
       console.error('Error downloading short:', error);
@@ -152,6 +168,55 @@ export const ShortsGallery = () => {
       document.body.removeChild(a);
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const deleteShort = async (shortId: string, filePath: string | null) => {
+    try {
+      setDeleting(shortId);
+      console.log(`Deleting short: ${shortId}`);
+      
+      // If there's a file path, attempt to delete from storage
+      if (filePath) {
+        console.log(`Attempting to delete file: ${filePath}`);
+        const { error: storageError } = await supabase
+          .storage
+          .from('shorts')
+          .remove([filePath]);
+          
+        if (storageError) {
+          console.error('Error removing file from storage:', storageError);
+          // Continue with deletion even if file removal fails
+        }
+      }
+      
+      // Delete short from database
+      const { error: deleteError } = await supabase
+        .from('shorts')
+        .delete()
+        .eq('id', shortId);
+        
+      if (deleteError) {
+        console.error('Error deleting short from database:', deleteError);
+        throw deleteError;
+      }
+      
+      // Update state to remove deleted short
+      setShorts(shorts.filter(short => short.id !== shortId));
+      
+      toast({
+        title: "Short Deleted",
+        description: "The short video has been successfully deleted.",
+      });
+    } catch (error) {
+      console.error('Error deleting short:', error);
+      toast({
+        title: "Delete Failed",
+        description: "There was an error deleting the short video. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -181,7 +246,6 @@ export const ShortsGallery = () => {
         toast({
           title: "Link Copied",
           description: "Share link copied to clipboard!",
-          variant: "default",
         });
       },
       () => {
@@ -254,11 +318,10 @@ export const ShortsGallery = () => {
                     variant="secondary" 
                     size="sm"
                     onClick={() => {
-                      // Instead of using short.url which doesn't exist in the type
-                      // Generate a preview URL from the file_path if it exists
-                      const previewUrl = short.file_path 
+                      // Use short.url if it exists, or generate a preview URL from file_path
+                      const previewUrl = short.url || (short.file_path 
                         ? supabase.storage.from('shorts').getPublicUrl(short.file_path).data?.publicUrl 
-                        : "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+                        : "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4");
                       
                       window.open(previewUrl, '_blank');
                     }}
@@ -290,7 +353,44 @@ export const ShortsGallery = () => {
                 </div>
               </div>
               <CardContent className="p-4">
-                <h3 className="font-medium line-clamp-1">{short.title}</h3>
+                <div className="flex justify-between items-start">
+                  <h3 className="font-medium line-clamp-1">{short.title}</h3>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Short</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete this short? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={() => deleteShort(short.id, short.file_path)}
+                          className="bg-red-500 hover:bg-red-600"
+                        >
+                          {deleting === short.id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Deleting...
+                            </>
+                          ) : (
+                            "Delete"
+                          )}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
                 <div className="flex justify-between items-center mt-2">
                   <span className="text-xs text-gray-500 dark:text-gray-400">
                     {new Date(short.created_at || '').toLocaleDateString()}
