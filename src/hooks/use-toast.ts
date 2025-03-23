@@ -9,6 +9,7 @@ export type ShadcnToastType = {
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  variant?: "default" | "destructive" | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -18,6 +19,7 @@ export type ToasterToast = Omit<ShadcnToastType, "id"> & {
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  variant?: "default" | "destructive" | null
 }
 
 const actionTypes = {
@@ -130,42 +132,39 @@ function dispatch(action: Action) {
   })
 }
 
-export type ToastOptions = Omit<ToasterToast, "id">
+// Extend the sonner toast type to include our variant
+type ExtendedToastOptions = Parameters<typeof sonnerToast>[1] & {
+  variant?: "default" | "destructive" | null
+}
 
-function toast(props: ToastOptions) {
-  const id = generateId()
-
-  const update = (props: ToasterToast) =>
-    dispatch({
-      type: "UPDATE_TOAST",
-      toast: { ...props, id },
-    })
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
-
-  dispatch({
-    type: "ADD_TOAST",
-    toast: {
-      ...props,
-      id,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss()
-      },
-    },
-  })
-
-  return {
-    id,
-    dismiss,
-    update,
+function toast(titleOrOptions: string | ToasterToast, options?: ExtendedToastOptions) {
+  // If first argument is a string, treat it as a title
+  if (typeof titleOrOptions === 'string') {
+    return sonnerToast(titleOrOptions, options);
   }
+  
+  // Otherwise, use it as options object
+  const { title, description, variant, ...restOptions } = titleOrOptions;
+  
+  // Forward to sonner with appropriate options
+  if (variant === 'destructive') {
+    return sonnerToast.error(title as string, { 
+      description,
+      ...restOptions 
+    });
+  }
+  
+  return sonnerToast(title as string, { 
+    description,
+    ...restOptions
+  });
 }
 
 // This is the hook that will be used in components
 function useToast() {
   return {
     // Export the sonner toast function for direct use
-    toast: sonnerToast,
+    toast,
     // Add convenience methods for common toast types
     success: (message: string, options = {}) => sonnerToast.success(message, options),
     error: (message: string, options = {}) => sonnerToast.error(message, options),

@@ -93,26 +93,27 @@ export const Profile = () => {
         .from('profiles')
         .upsert({
           // id: auth.user.id (in a real app),
+          id: crypto.randomUUID(), // Generate a random UUID for demo
           full_name: profile.name,
           username: profile.username,
           bio: profile.bio,
           avatar_url: avatarUrl,
           plan: profile.plan,
-          updated_at: new Date()
+          updated_at: new Date().toISOString()
         });
         
       if (error) throw error;
       
       toast({
         title: "Profile updated",
-        description: "Your profile has been successfully updated.",
+        description: "Your profile has been successfully updated."
       });
     } catch (error) {
       console.error('Error updating profile:', error);
       toast({
         title: "Update failed",
         description: "There was an error updating your profile. Please try again.",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);
