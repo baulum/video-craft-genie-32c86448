@@ -71,15 +71,16 @@ export const ShortsGallery = () => {
     try {
       setDownloading(shortId);
       
-      // Ensure the filePath doesn't have a duplicate 'shorts/' prefix
-      const correctPath = filePath.replace(/^shorts\//, '');
+      if (!filePath) {
+        throw new Error("File path is missing");
+      }
       
-      console.log(`Attempting to download file: ${correctPath}`);
+      console.log(`Attempting to download file: ${filePath}`);
       
       // Create a signed URL for downloading
       const { data, error } = await supabase.storage
         .from('shorts')
-        .createSignedUrl(correctPath, 60); // URL valid for 60 seconds
+        .createSignedUrl(filePath, 60); // URL valid for 60 seconds
       
       if (error) {
         console.error('Error creating signed URL:', error);

@@ -109,20 +109,38 @@ serve(async (req) => {
         // Use the correct path format for storing in Supabase storage
         const shortsData = []
         
-        // First, check if the shorts bucket exists, create it if it doesn't
+        // First, verify if the bucket exists and create it if it doesn't
         try {
-          const { data: bucketExists } = await supabaseClient.storage.getBucket('shorts')
+          const { data: bucketsData, error: bucketsError } = await supabaseClient
+            .storage
+            .listBuckets()
           
-          if (!bucketExists) {
+          if (bucketsError) {
+            console.error('Error listing buckets:', bucketsError.message)
+            throw bucketsError
+          }
+          
+          const shortsBucketExists = bucketsData.some(bucket => bucket.name === 'shorts')
+          
+          if (!shortsBucketExists) {
             console.log('Creating shorts bucket...')
-            await supabaseClient.storage.createBucket('shorts', {
+            const { error: createBucketError } = await supabaseClient.storage.createBucket('shorts', {
               public: true,
               fileSizeLimit: 52428800 // 50MB limit
             })
+            
+            if (createBucketError) {
+              console.error('Error creating bucket:', createBucketError.message)
+              throw createBucketError
+            }
+            
+            console.log('Shorts bucket created successfully')
+          } else {
+            console.log('Shorts bucket already exists')
           }
         } catch (error) {
-          console.log('Bucket already exists or error checking bucket:', error.message)
-          // Continue as the bucket might already exist
+          console.error('Error checking/creating bucket:', error.message)
+          // Continue execution as the bucket might exist despite the error
         }
         
         // Generate placeholder video content (in a real app, this would be actual video content)
@@ -150,6 +168,8 @@ serve(async (req) => {
             console.error(`Error uploading short video: ${uploadError.message}`)
             throw new Error(`Failed to upload short video: ${uploadError.message}`)
           }
+          
+          console.log(`Successfully uploaded short video to: ${filePath}`)
           
           // Add the short data to our array for database insertion
           shortsData.push({
