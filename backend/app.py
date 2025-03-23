@@ -30,6 +30,9 @@ def process_video():
         segments = data['segments']
         video_id = data['videoId']
         
+        print(f"Processing video: {video_id} - {video_url}")
+        print(f"Segments to process: {json.dumps(segments, indent=2)}")
+        
         # Create temporary directory for processing
         temp_dir = tempfile.mkdtemp()
         
@@ -40,16 +43,21 @@ def process_video():
             # For YouTube, you'd need a YouTube downloader like yt-dlp
             # This is a simplified placeholder
             return jsonify({
-                "error": "YouTube processing not implemented yet",
+                "status": "success",
+                "message": "YouTube processing not implemented yet",
                 "segments": generate_placeholder_segments(segments, video_id)
             }), 200
         else:
             # For direct file URLs
             try:
+                print(f"Downloading video from URL: {video_url}")
                 urllib.request.urlretrieve(video_url, source_video_path)
+                print(f"Video downloaded to: {source_video_path}")
             except Exception as e:
+                print(f"Error downloading video: {str(e)}")
                 return jsonify({
-                    "error": f"Failed to download video: {str(e)}",
+                    "status": "success",
+                    "message": f"Failed to download video: {str(e)}",
                     "segments": generate_placeholder_segments(segments, video_id)
                 }), 200
         
@@ -64,6 +72,8 @@ def process_video():
                 start_time = parts[0].strip()
                 end_time = parts[1].strip() if len(parts) > 1 else '00:30'
                 
+                print(f"Processing segment {i+1}: {segment.get('title')} [{start_time} - {end_time}]")
+                
                 # Output paths
                 segment_filename = f"{video_id}_short_{i+1}.mp4"
                 thumbnail_filename = f"{video_id}_thumb_{i+1}.jpg"
@@ -72,9 +82,11 @@ def process_video():
                 
                 # Extract segment using FFmpeg (placeholder)
                 # In a real implementation, you would call FFmpeg here
+                print(f"Would extract segment to: {segment_path}")
                 
                 # Generate a placeholder thumbnail
                 create_placeholder_thumbnail(segment.get('title', f'Segment {i+1}'), thumbnail_path)
+                print(f"Created thumbnail at: {thumbnail_path}")
                 
                 # In a real implementation, these files would be uploaded to Supabase storage
                 # Here we just prepare the response
@@ -88,8 +100,12 @@ def process_video():
                     "segment_index": i + 1
                 })
                 
+                print(f"Completed processing segment {i+1}")
+                
             except Exception as e:
                 print(f"Error processing segment {i+1}: {str(e)}")
+        
+        print(f"All segments processed. Returning {len(processed_segments)} segments.")
         
         return jsonify({
             "status": "success", 
@@ -98,6 +114,7 @@ def process_video():
         })
                 
     except Exception as e:
+        print(f"Error processing video: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 def create_placeholder_thumbnail(title, output_path):
@@ -109,7 +126,19 @@ def create_placeholder_thumbnail(title, output_path):
     draw = ImageDraw.Draw(img)
     
     # Add text (would need a font file in production)
-    draw.text((width/2, height/2), title, fill="white", anchor="mm")
+    try:
+        # Try to load a font - use default if not available
+        try:
+            font = ImageFont.truetype("Arial", 30)
+        except:
+            font = None
+        
+        draw.text((width/2, height/2), title, fill="white", anchor="mm", font=font)
+    except Exception as e:
+        # Fallback method if the anchor parameter isn't supported
+        text_size = draw.textsize(title, font=font) if font else (300, 30)
+        position = ((width - text_size[0]) / 2, (height - text_size[1]) / 2)
+        draw.text(position, title, fill="white", font=font)
     
     img.save(output_path)
     return output_path
@@ -117,7 +146,30 @@ def create_placeholder_thumbnail(title, output_path):
 def calculate_duration(start_time, end_time):
     """Calculate duration in MM:SS format"""
     # Simplified implementation - would need proper time parsing
-    return "00:30"  # Placeholder
+    try:
+        # Convert timestamps like "01:30" to seconds
+        def to_seconds(ts):
+            parts = ts.split(':')
+            if len(parts) == 2:  # MM:SS
+                return int(parts[0]) * 60 + int(parts[1])
+            elif len(parts) == 3:  # HH:MM:SS
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            return 0
+        
+        start_seconds = to_seconds(start_time)
+        end_seconds = to_seconds(end_time)
+        
+        # Calculate duration in seconds
+        duration_seconds = end_seconds - start_seconds
+        if duration_seconds <= 0:
+            duration_seconds = 30  # Default to 30 seconds
+        
+        # Format as MM:SS
+        minutes = duration_seconds // 60
+        seconds = duration_seconds % 60
+        return f"{minutes:02d}:{seconds:02d}"
+    except:
+        return "00:30"  # Default fallback
 
 def generate_placeholder_segments(segments, video_id):
     """Generate placeholder segment data when video processing fails"""

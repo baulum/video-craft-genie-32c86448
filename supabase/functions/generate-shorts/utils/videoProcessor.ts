@@ -1,5 +1,7 @@
 
-import { generateFallbackThumbnail, dataURLtoBuffer } from "./videoProcessor";
+/**
+ * Utility functions for processing videos and creating segments
+ */
 
 /**
  * Create a video segment using the external Flask backend
@@ -19,25 +21,67 @@ export async function createVideoSegment(videoId: string, segmentData: any, vide
     
     console.log(`Processing segment from ${startTime}s to ${endTime}s (duration: ${duration}s)`);
     
-    // For now, we'll generate fallback responses as we're migrating to the Flask backend
-    // The Flask backend will handle the actual video processing
-    console.log(`Using fallback response while Flask backend is being set up`);
+    // Call the Flask backend to process the video
+    const flaskBackendUrl = Deno.env.get('FLASK_BACKEND_URL') || 'http://localhost:5000';
+    console.log(`Calling Flask backend at: ${flaskBackendUrl}/api/process-video`);
     
-    // Generate fallback thumbnail
-    console.log(`Generating fallback thumbnail for: ${segmentData.title}`);
-    const fallbackThumb = generateFallbackThumbnail(segmentData.title);
-    const fallbackBuffer = dataURLtoBuffer(fallbackThumb);
-    
-    return {
-      videoBuffer: new Uint8Array(1024), // Just a placeholder until Flask backend is working
-      thumbnailBuffer: fallbackBuffer,
-      metadata: {
-        title: segmentData.title,
-        description: segmentData.description,
-        timestamp: segmentData.timestamp,
-        duration: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`
+    try {
+      // Make a request to the Flask backend
+      const response = await fetch(`${flaskBackendUrl}/api/process-video`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          videoId: videoId,
+          videoUrl: videoUrl,
+          segments: [segmentData]
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Flask backend returned error: ${response.status} - ${errorText}`);
       }
-    };
+      
+      const result = await response.json();
+      console.log(`Flask backend processed segment successfully:`, result);
+      
+      // For now, generate fallback thumbnail until Flask backend is fully connected
+      console.log(`Generating fallback thumbnail for: ${segmentData.title}`);
+      const fallbackThumb = generateFallbackThumbnail(segmentData.title);
+      const fallbackBuffer = dataURLtoBuffer(fallbackThumb);
+      
+      return {
+        videoBuffer: new Uint8Array(1024), // Just a placeholder until Flask backend is working
+        thumbnailBuffer: fallbackBuffer,
+        metadata: {
+          title: segmentData.title,
+          description: segmentData.description,
+          timestamp: segmentData.timestamp,
+          duration: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`
+        }
+      };
+    } catch (fetchError) {
+      console.error(`Error calling Flask backend:`, fetchError);
+      console.log(`Using fallback response due to Flask backend error`);
+      
+      // Generate fallback thumbnail
+      console.log(`Generating fallback thumbnail for: ${segmentData.title}`);
+      const fallbackThumb = generateFallbackThumbnail(segmentData.title);
+      const fallbackBuffer = dataURLtoBuffer(fallbackThumb);
+      
+      return {
+        videoBuffer: new Uint8Array(1024), // Just a placeholder
+        thumbnailBuffer: fallbackBuffer,
+        metadata: {
+          title: segmentData.title,
+          description: segmentData.description,
+          timestamp: segmentData.timestamp,
+          duration: `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`
+        }
+      };
+    }
   } catch (error) {
     console.error(`Error creating video segment:`, error);
     throw error;

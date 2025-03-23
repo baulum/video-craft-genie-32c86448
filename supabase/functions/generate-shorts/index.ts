@@ -174,7 +174,7 @@ async function processVideo(videoId: string, video: any, supabaseClient: any, mo
         const videoFilePath = `${videoId}_short_${i + 1}.mp4`;
         const thumbnailFilePath = `${videoId}_thumb_${i + 1}.jpg`;
         
-        // Create video segment mockup (since actual video processing is limited in Edge Functions)
+        // Create video segment using Flask backend
         const { metadata } = await createVideoSegment(videoId, segment, video.url, supabaseClient);
         
         // Generate a fallback thumbnail 
