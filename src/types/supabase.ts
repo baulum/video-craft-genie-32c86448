@@ -7,7 +7,12 @@ export type VideoInsert = Database['public']['Tables']['videos']['Insert'];
 export type VideoUpdate = Database['public']['Tables']['videos']['Update'];
 
 // Short types
-export type Short = Database['public']['Tables']['shorts']['Row'];
+export type Short = Database['public']['Tables']['shorts']['Row'] & {
+  videos?: {
+    title: string;
+    thumbnail_url: string | null;
+  } | null;
+};
 export type ShortInsert = Database['public']['Tables']['shorts']['Insert'];
 export type ShortUpdate = Database['public']['Tables']['shorts']['Update'];
 
