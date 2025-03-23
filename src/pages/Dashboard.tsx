@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   SidebarProvider, 
   Sidebar, 
@@ -33,12 +33,61 @@ import { VideoUpload } from "@/components/dashboard/VideoUpload";
 import { VideoList } from "@/components/dashboard/VideoList";
 import { VideoStats } from "@/components/dashboard/VideoStats";
 import { ShortsGallery } from "@/components/dashboard/ShortsGallery";
+import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "sonner";
 
 // Mock authentication check - this would be replaced with a real auth check
 const isAuthenticated = true; // Replace with actual auth state
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("videos");
+  const { toast } = useToast();
+
+  // Handle global errors
+  useEffect(() => {
+    const originalError = console.error;
+    
+    // Override console.error to catch and display critical errors as toasts
+    console.error = (...args) => {
+      // Call the original console.error first
+      originalError(...args);
+      
+      // Extract meaningful error message
+      const errorMessage = args
+        .map(arg => {
+          if (arg instanceof Error) return arg.message;
+          if (typeof arg === 'string') return arg;
+          return '';
+        })
+        .filter(Boolean)
+        .join(' ');
+      
+      // Only show toast for relevant errors (avoid spamming the user)
+      if (errorMessage && !errorMessage.includes('solana') && !errorMessage.includes('provider.js')) {
+        toast.error("An error occurred. Please try again or contact support if the issue persists.");
+      }
+    };
+    
+    // Handle wallet provider errors specifically
+    const handleWalletError = (event) => {
+      // Ignore specific errors related to wallet providers that aren't critical
+      if (event.message && (
+        event.message.includes('solana') || 
+        event.message.includes('redefine property') ||
+        event.message.includes('provider.js')
+      )) {
+        event.preventDefault();
+        return;
+      }
+    };
+    
+    window.addEventListener('error', handleWalletError);
+    
+    return () => {
+      console.error = originalError;
+      window.removeEventListener('error', handleWalletError);
+    };
+  }, [toast]);
 
   // Redirect if not authenticated
   if (!isAuthenticated) {
@@ -48,6 +97,9 @@ const Dashboard = () => {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-slate-50 dark:bg-gray-900">
+        {/* Add Toaster component for notifications */}
+        <Toaster position="top-right" />
+        
         <Sidebar>
           <SidebarHeader className="flex flex-row items-center justify-between px-4 py-2">
             <Link to="/" className="flex items-center">
