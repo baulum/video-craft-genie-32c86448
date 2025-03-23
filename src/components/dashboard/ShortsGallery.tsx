@@ -6,19 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Download, Share, Trash2, Play, Pause, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { showToast } from "@/utils/toast-helper";
-
-interface Short {
-  id: string;
-  title: string;
-  description?: string;
-  timestamp?: string;
-  duration?: string;
-  url: string;
-  file_path?: string;
-  thumbnail_url?: string;
-  views: number;
-  video_id?: string;
-}
+import { Short } from "@/types/supabase";
 
 export const ShortsGallery = () => {
   const [activeTab, setActiveTab] = useState("all");
@@ -40,7 +28,32 @@ export const ShortsGallery = () => {
 
       if (error) throw error;
 
+      console.log("Fetched shorts:", data);
       setShorts(data || []);
+      
+      // For each short, check if the signed URL is expired and refresh if needed
+      if (data && data.length > 0) {
+        const updatedShorts = await Promise.all(data.map(async (short) => {
+          // If url exists but might be expired, refresh it
+          if (short.file_path) {
+            try {
+              const { data: { signedUrl } } = await supabase.storage
+                .from('shorts')
+                .createSignedUrl(short.file_path, 604800); // 7 days
+                
+              if (signedUrl) {
+                return { ...short, url: signedUrl };
+              }
+            } catch (error) {
+              console.error(`Error refreshing signed URL for short ${short.id}:`, error);
+            }
+          }
+          return short;
+        }));
+        
+        setShorts(updatedShorts);
+      }
+
       showToast.success(
         "Shorts Loaded",
         `${data?.length || 0} shorts retrieved successfully`
@@ -107,29 +120,23 @@ export const ShortsGallery = () => {
 
       console.log("Attempting to download file from path:", short.file_path);
       
-      // Check if the file exists first
-      const { data: fileExists, error: checkError } = await supabase.storage
+      // Get a fresh signed URL for the file
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from('shorts')
-        .list(short.file_path.split('/')[0]);
+        .createSignedUrl(short.file_path, 60); // 1 minute expiry for download
         
-      if (checkError) {
-        console.error("Error checking if file exists:", checkError);
-        throw new Error("Could not verify file exists");
+      if (signedUrlError) {
+        console.error("Error creating signed URL:", signedUrlError);
+        throw new Error("Failed to generate download link");
       }
       
-      const filename = short.file_path.split('/').pop();
-      if (!fileExists.some(f => f.name === filename)) {
-        throw new Error("File does not exist in storage");
+      if (!signedUrlData || !signedUrlData.signedUrl) {
+        throw new Error("No signed URL received from server");
       }
-
-      // Get a public URL for the file
-      const { data: publicUrlData } = supabase.storage
-        .from('shorts')
-        .getPublicUrl(short.file_path);
-        
+      
       // Create a hidden anchor and trigger download
       const a = document.createElement('a');
-      a.href = publicUrlData.publicUrl;
+      a.href = signedUrlData.signedUrl;
       a.download = `${short.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
       document.body.appendChild(a);
       a.click();
@@ -147,20 +154,35 @@ export const ShortsGallery = () => {
 
   const handleShare = async (short: Short) => {
     try {
-      if (navigator.share && short.url) {
+      // Get a fresh signed URL that lasts longer for sharing
+      let shareUrl = short.url;
+      
+      if (short.file_path) {
+        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+          .from('shorts')
+          .createSignedUrl(short.file_path, 604800); // 7 days for sharing
+          
+        if (!signedUrlError && signedUrlData && signedUrlData.signedUrl) {
+          shareUrl = signedUrlData.signedUrl;
+        }
+      }
+      
+      if (!shareUrl) {
+        throw new Error("No URL available to share");
+      }
+      
+      if (navigator.share) {
         await navigator.share({
           title: short.title,
           text: short.description || `Check out this short: ${short.title}`,
-          url: short.url
+          url: shareUrl
         });
         
         showToast.success("Shared Successfully", "Your short has been shared");
-      } else if (short.url) {
-        // Fallback for browsers that don't support the Web Share API
-        await navigator.clipboard.writeText(short.url);
-        showToast.success("Link Copied", "Short URL copied to clipboard");
       } else {
-        throw new Error("No URL available to share");
+        // Fallback for browsers that don't support the Web Share API
+        await navigator.clipboard.writeText(shareUrl);
+        showToast.success("Link Copied", "Short URL copied to clipboard");
       }
     } catch (error) {
       console.error("Error sharing:", error);
@@ -257,7 +279,7 @@ export const ShortsGallery = () => {
                   short={short}
                   isPlaying={playing === short.id}
                   onPlayPause={() => handlePlayPause(short.id)}
-                  onDelete={() => handleDelete(short.id)}
+                  onDelete={() => handleDelete(short)}
                   onDownload={() => handleDownload(short)}
                   onShare={() => handleShare(short)}
                 />
@@ -282,7 +304,32 @@ interface ShortCardProps {
 const ShortCard = ({ short, isPlaying, onPlayPause, onDelete, onDownload, onShare }: ShortCardProps) => {
   // Generate a fallback thumbnail if none is provided
   const thumbnailUrl = short.thumbnail_url || 
-    `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjExMzYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzU1NTU1NSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBhbGlnbm1lbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI2ZmZmZmZiI+JHtzaG9ydC50aXRsZX08L3RleHQ+PC9zdmc+`;
+    `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjExMzYiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzM2NTFDOCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBhbGlnbm1lbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI2ZmZmZmZiI+JHtzaG9ydC50aXRsZX08L3RleHQ+PC9zdmc+`;
+
+  // If URL is missing but we have file_path, try to get a signed URL
+  useEffect(() => {
+    if (!short.url && short.file_path) {
+      const getSignedUrl = async () => {
+        try {
+          const { data } = await supabase.storage
+            .from('shorts')
+            .createSignedUrl(short.file_path as string, 604800); // 7 days
+            
+          if (data && data.signedUrl) {
+            // We can't modify the original short directly, so this is just for display
+            const videoElement = document.getElementById(`video-${short.id}`) as HTMLVideoElement;
+            if (videoElement) {
+              videoElement.src = data.signedUrl;
+            }
+          }
+        } catch (error) {
+          console.error("Error getting signed URL:", error);
+        }
+      };
+      
+      getSignedUrl();
+    }
+  }, [short.id, short.url, short.file_path]);
 
   return (
     <Card className="overflow-hidden">
@@ -293,6 +340,7 @@ const ShortCard = ({ short, isPlaying, onPlayPause, onDelete, onDownload, onShar
       <CardContent className="p-0 aspect-[9/16] relative bg-gray-100 dark:bg-gray-800">
         {isPlaying ? (
           <video 
+            id={`video-${short.id}`}
             className="w-full h-full object-cover"
             src={short.url}
             autoPlay
@@ -328,9 +376,9 @@ const ShortCard = ({ short, isPlaying, onPlayPause, onDelete, onDownload, onShar
               {short.views || 0}
             </div>
             
-            {short.duration && (
+            {(short.metadata?.duration || short.duration) && (
               <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                {short.duration}
+                {short.metadata?.duration || short.duration}
               </div>
             )}
           </div>

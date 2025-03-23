@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { showToast } from "@/utils/toast-helper";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import { Short } from "@/types/supabase";
+import { ShortPreviewCard } from "@/components/dashboard/ShortPreviewCard";
 
 interface VideoPreviewProps {
   video: {
@@ -24,6 +26,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
   const [processingStatus, setProcessingStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [processingProgress, setProcessingProgress] = useState(0);
+  const [generatedShorts, setGeneratedShorts] = useState<Short[]>([]);
 
   // Check processing status periodically if processing
   useEffect(() => {
@@ -48,6 +51,8 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
               "Processing Complete",
               "Your shorts have been generated successfully!"
             );
+            // Fetch the generated shorts
+            fetchGeneratedShorts();
           } else if (data.status === 'error') {
             setProcessingStatus("error");
             setIsProcessing(false);
@@ -69,6 +74,30 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
     const interval = setInterval(checkStatus, 3000);
     return () => clearInterval(interval);
   }, [video.id, processingStatus]);
+
+  // Fetch shorts that were generated from this video
+  const fetchGeneratedShorts = async () => {
+    if (!video.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('shorts')
+        .select('*')
+        .eq('video_id', video.id)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      
+      console.log("Retrieved generated shorts:", data);
+      setGeneratedShorts(data || []);
+    } catch (error) {
+      console.error("Error fetching generated shorts:", error);
+      showToast.error(
+        "Error",
+        "Failed to load generated shorts"
+      );
+    }
+  };
 
   const handleGenerateShorts = async () => {
     if (!video.id) {
@@ -236,6 +265,25 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           </Button>
         </CardFooter>
       </Card>
+
+      {/* Display generated shorts */}
+      {generatedShorts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Generated Shorts</CardTitle>
+            <CardDescription>
+              These shorts were created from your video
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {generatedShorts.map(short => (
+                <ShortPreviewCard key={short.id} short={short} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

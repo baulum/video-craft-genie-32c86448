@@ -14,6 +14,12 @@ export type Short = Database['public']['Tables']['shorts']['Row'] & {
   } | null;
   url?: string; // Add the url property that might come from the frontend
   video_status?: 'transcoding' | 'ready' | 'error';
+  metadata?: {
+    title: string;
+    description: string;
+    timestamp: string;
+    duration: string;
+  };
 };
 export type ShortInsert = Database['public']['Tables']['shorts']['Insert'];
 export type ShortUpdate = Database['public']['Tables']['shorts']['Update'];
