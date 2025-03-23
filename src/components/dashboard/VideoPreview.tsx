@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scissors, RefreshCw, Check, Clock, AlertCircle, Video } from "lucide-react";
@@ -28,7 +27,6 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
   const [processingProgress, setProcessingProgress] = useState(0);
   const [generatedShorts, setGeneratedShorts] = useState<Short[]>([]);
 
-  // Check processing status periodically if processing
   useEffect(() => {
     if (!video.id || processingStatus !== "processing") return;
 
@@ -51,7 +49,6 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
               "Processing Complete",
               "Your shorts have been generated successfully!"
             );
-            // Fetch the generated shorts
             fetchGeneratedShorts();
           } else if (data.status === 'error') {
             setProcessingStatus("error");
@@ -62,7 +59,6 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
               data.error_message || "There was an error generating your shorts."
             );
           } else if (data.status === 'processing') {
-            // Increment progress simulation
             setProcessingProgress(prev => Math.min(prev + 5, 90));
           }
         }
@@ -75,7 +71,6 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
     return () => clearInterval(interval);
   }, [video.id, processingStatus]);
 
-  // Fetch shorts that were generated from this video
   const fetchGeneratedShorts = async () => {
     if (!video.id) return;
     
@@ -188,7 +183,6 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
 
   const renderVideoPreview = () => {
     if (video.source === "youtube") {
-      // For YouTube videos, embed the YouTube player
       const youtubeId = getYoutubeVideoId(video.url);
       if (youtubeId) {
         return (
@@ -203,7 +197,6 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
       }
     }
     
-    // For file uploads or fallback
     return (
       <div className="flex flex-col items-center justify-center h-full text-gray-500 bg-gray-100 dark:bg-gray-800">
         <Video className="h-16 w-16 mb-2 text-gray-400" />
@@ -211,8 +204,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
       </div>
     );
   };
-  
-  // Extract YouTube video ID from various URL formats
+
   function getYoutubeVideoId(url: string): string | null {
     if (!url) return null;
     
@@ -263,11 +255,21 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
             <Scissors className="h-4 w-4 mr-2" />
             {isProcessing ? "Processing..." : processingStatus === "success" ? "Shorts Generated" : "Generate Shorts"}
           </Button>
+          
+          {processingStatus === "success" && generatedShorts.length > 0 && (
+            <div className="mt-4 w-full">
+              <p className="text-sm font-medium mb-2">Generated Shorts:</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {generatedShorts.map(short => (
+                  <ShortPreviewCard key={short.id} short={short} />
+                ))}
+              </div>
+            </div>
+          )}
         </CardFooter>
       </Card>
 
-      {/* Display generated shorts */}
-      {generatedShorts.length > 0 && (
+      {processingStatus === "success" && generatedShorts.length > 0 && false && (
         <Card>
           <CardHeader>
             <CardTitle>Generated Shorts</CardTitle>
