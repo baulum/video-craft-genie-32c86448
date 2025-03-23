@@ -70,25 +70,28 @@ export const useShorts = () => {
     try {
       // Find the short to get the file path
       const shortToDelete = shorts.find(s => s.id === shortId);
-      if (!shortToDelete) return;
+      if (!shortToDelete) {
+        console.error("Short not found for deletion:", shortId);
+        return;
+      }
+
+      console.log("Deleting short:", shortToDelete);
 
       // Delete from database first
-      const { error } = await supabase
+      const { error: dbError } = await supabase
         .from('shorts')
         .delete()
         .eq('id', shortId);
 
-      if (error) throw error;
+      if (dbError) {
+        console.error("Database deletion error:", dbError);
+        throw dbError;
+      }
 
-      // Update local state
-      setShorts(shorts.filter(short => short.id !== shortId));
-      
-      toast.success("Short Deleted", {
-        description: "The short has been successfully deleted"
-      });
-      
-      // Then try to delete the file if it exists (but don't block on this)
+      // Try to delete the file if it exists
       if (shortToDelete.file_path) {
+        console.log("Attempting to delete file:", shortToDelete.file_path);
+        
         try {
           const { error: storageError } = await supabase.storage
             .from('shorts')
@@ -96,11 +99,23 @@ export const useShorts = () => {
 
           if (storageError) {
             console.warn("Error removing file from storage:", storageError);
+            // Continue despite storage error - we still want to update UI
+          } else {
+            console.log("File deleted successfully");
           }
-        } catch (error) {
-          console.warn("Error checking file existence:", error);
+        } catch (storageErr) {
+          console.warn("Exception during storage deletion:", storageErr);
+          // Continue despite storage error
         }
       }
+
+      // Update local state immediately
+      setShorts(prevShorts => prevShorts.filter(short => short.id !== shortId));
+      
+      toast.success("Short Deleted", {
+        description: "The short has been successfully deleted"
+      });
+      
     } catch (error) {
       console.error("Error deleting short:", error);
       toast.error("Delete Failed", {
@@ -205,6 +220,26 @@ export const useShorts = () => {
 
   useEffect(() => {
     fetchShorts();
+    
+    // Set up a subscription to shorts table changes
+    const channel = supabase
+      .channel('shorts-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'shorts' 
+        }, 
+        payload => {
+          console.log("Shorts table changed:", payload);
+          fetchShorts();
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return {
