@@ -71,10 +71,17 @@ export const ShortsGallery = () => {
     try {
       setDownloading(shortId);
       
+      // Fix the path - remove redundant 'shorts/' prefix if it exists
+      const correctPath = filePath.startsWith('shorts/') 
+        ? filePath
+        : `shorts/${filePath}`;
+      
+      console.log(`Attempting to download file: ${correctPath}`);
+      
       // Create a signed URL for downloading
       const { data, error } = await supabase.storage
         .from('shorts')
-        .createSignedUrl(filePath, 60); // URL valid for 60 seconds
+        .createSignedUrl(correctPath, 60); // URL valid for 60 seconds
       
       if (error) {
         console.error('Error creating signed URL:', error);

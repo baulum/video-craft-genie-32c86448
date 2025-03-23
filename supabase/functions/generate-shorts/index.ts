@@ -109,11 +109,13 @@ serve(async (req) => {
         // Determine durations (realistic for short videos)
         const durations = ["00:45", "00:52", "00:38"]
         
+        // Use the correct path format for storing in Supabase storage
+        // Store directly under the shorts bucket without a redundant "shorts/" prefix
         const shortsData = shortTopics.map((topic, index) => ({
           title: `${topic} - ${video.title.substring(0, 30)}${video.title.length > 30 ? '...' : ''}`,
           duration: durations[index],
           thumbnail_url: thumbnailUrl,
-          file_path: `shorts/${videoId}/short_${index + 1}.mp4`,
+          file_path: `${videoId}/short_${index + 1}.mp4`,  // Corrected path format
           video_id: videoId,
           views: 0
         }))
