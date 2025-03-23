@@ -17,6 +17,7 @@ export type Database = {
           file_path: string | null
           id: string
           thumbnail_url: string | null
+          timestamp: string | null
           title: string
           updated_at: string | null
           video_id: string | null
@@ -29,6 +30,7 @@ export type Database = {
           file_path?: string | null
           id?: string
           thumbnail_url?: string | null
+          timestamp?: string | null
           title: string
           updated_at?: string | null
           video_id?: string | null
@@ -41,6 +43,7 @@ export type Database = {
           file_path?: string | null
           id?: string
           thumbnail_url?: string | null
+          timestamp?: string | null
           title?: string
           updated_at?: string | null
           video_id?: string | null

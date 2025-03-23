@@ -26,13 +26,16 @@ import {
   Settings,
   Plus,
   ListFilter,
-  Search
+  Search,
+  User
 } from "lucide-react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { VideoUpload } from "@/components/dashboard/VideoUpload";
 import { VideoList } from "@/components/dashboard/VideoList";
 import { VideoStats } from "@/components/dashboard/VideoStats";
 import { ShortsGallery } from "@/components/dashboard/ShortsGallery";
+import { Profile } from "@/components/dashboard/Profile";
+import { Settings as SettingsComponent } from "@/components/dashboard/Settings";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "sonner";
 
@@ -40,8 +43,20 @@ import { Toaster } from "sonner";
 const isAuthenticated = true; // Replace with actual auth state
 
 const Dashboard = () => {
-  const [activeTab, setActiveTab] = useState("videos");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
+  const tabFromQuery = searchParams.get('tab');
+  
+  const [activeTab, setActiveTab] = useState(tabFromQuery || "videos");
   const { toast } = useToast();
+
+  // Update URL when tab changes
+  useEffect(() => {
+    const newSearchParams = new URLSearchParams(location.search);
+    newSearchParams.set('tab', activeTab);
+    navigate({ search: newSearchParams.toString() }, { replace: true });
+  }, [activeTab, navigate, location.search]);
 
   // Handle global errors
   useEffect(() => {
@@ -160,11 +175,26 @@ const Dashboard = () => {
             </SidebarGroup>
             
             <SidebarGroup>
-              <SidebarGroupLabel>Settings</SidebarGroupLabel>
+              <SidebarGroupLabel>Account</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton tooltip="Settings">
+                    <SidebarMenuButton 
+                      isActive={activeTab === "profile"} 
+                      onClick={() => setActiveTab("profile")}
+                      tooltip="Profile"
+                    >
+                      <User />
+                      <span>Profile</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      isActive={activeTab === "settings"} 
+                      onClick={() => setActiveTab("settings")}
+                      tooltip="Settings"
+                    >
                       <Settings />
                       <span>Settings</span>
                     </SidebarMenuButton>
@@ -193,10 +223,11 @@ const Dashboard = () => {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <div className="flex justify-between items-center mb-6">
                 <TabsList>
-                  <TabsTrigger value="videos">All Videos</TabsTrigger>
+                  <TabsTrigger value="videos">Videos</TabsTrigger>
                   <TabsTrigger value="upload">Upload</TabsTrigger>
                   <TabsTrigger value="shorts">Shorts</TabsTrigger>
-                  <TabsTrigger value="history">History</TabsTrigger>
+                  <TabsTrigger value="profile">Profile</TabsTrigger>
+                  <TabsTrigger value="settings">Settings</TabsTrigger>
                 </TabsList>
                 
                 <div className="flex items-center gap-2">
@@ -244,6 +275,14 @@ const Dashboard = () => {
                     </div>
                   </div>
                 </div>
+              </TabsContent>
+              
+              <TabsContent value="profile">
+                <Profile />
+              </TabsContent>
+              
+              <TabsContent value="settings">
+                <SettingsComponent />
               </TabsContent>
             </Tabs>
           </div>

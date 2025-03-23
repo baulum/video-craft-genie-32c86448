@@ -340,23 +340,28 @@ serve(async (req) => {
             .getPublicUrl(filePath);
           
           // Add to shorts data for database
-          shortsData.push({
+          const shortData = {
             title: shortTitle,
-            description: segment.description || "No description provided", // Make sure description is set
+            description: segment.description || "No description provided", 
             duration: duration,
-            timestamp: segment.timestamp,
+            timestamp: segment.timestamp,  // Using the timestamp field we just added
             thumbnail_url: thumbnailUrl,
             file_path: filePath,
             video_id: videoId,
             views: 0,
             url: publicUrl
-          });
+          };
+          
+          console.log(`Preparing to insert short data:`, JSON.stringify(shortData));
+          
+          shortsData.push(shortData);
         }
         
         console.log(`Creating ${shortsData.length} shorts for video ID: ${videoId}`);
         
         // Insert shorts into database
         for (const shortData of shortsData) {
+          console.log(`Inserting short:`, JSON.stringify(shortData));
           const { error: insertError } = await supabaseClient
             .from('shorts')
             .insert(shortData);
@@ -365,6 +370,8 @@ serve(async (req) => {
             console.error(`Error inserting short:`, insertError);
             throw new Error(`Failed to insert short: ${insertError.message}`);
           }
+          
+          console.log(`Successfully inserted short: ${shortData.title}`);
         }
         
         // Update video status to complete
