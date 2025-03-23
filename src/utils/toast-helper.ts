@@ -3,26 +3,26 @@ import { toast } from "@/hooks/use-toast";
 
 export const showToast = {
   success: (title: string, description?: string) => {
-    toast({
-      title,
-      description,
-      variant: "default"
+    toast.success(title, {
+      description
     });
   },
   
   error: (title: string, description?: string) => {
-    toast({
-      title, 
-      description,
-      variant: "destructive"
+    toast.error(title, {
+      description
     });
   },
   
   info: (title: string, description?: string) => {
-    toast.info(title, { description });
+    toast.info(title, {
+      description
+    });
   },
   
   warning: (title: string, description?: string) => {
-    toast.warning(title, { description });
+    toast.warning(title, {
+      description
+    });
   }
 };

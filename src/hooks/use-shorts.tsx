@@ -20,48 +20,26 @@ export const useShorts = () => {
       if (error) throw error;
 
       console.log("Fetched shorts:", data);
-      setShorts(data || []);
       
-      // For each short, check if the signed URL is expired and refresh if needed
-      if (data && data.length > 0) {
-        const updatedShorts = await Promise.all(data.map(async (short) => {
-          // If url exists but might be expired, refresh it
-          if (short.file_path) {
-            try {
-              // Check if file exists before creating signed URL
-              const { data: fileExists } = await supabase.storage
-                .from('shorts')
-                .list(short.file_path.split('/').slice(0, -1).join('/') || '');
-                
-              const fileName = short.file_path.split('/').pop();
-              const fileExistsInBucket = fileExists?.some(file => file.name === fileName);
-              
-              if (fileExistsInBucket) {
-                const { data: signedUrlData } = await supabase.storage
-                  .from('shorts')
-                  .createSignedUrl(short.file_path, 604800); // 7 days
-                  
-                if (signedUrlData?.signedUrl) {
-                  return { ...short, url: signedUrlData.signedUrl };
-                }
-              } else {
-                console.log(`File does not exist at path: ${short.file_path}`);
-              }
-            } catch (error) {
-              console.error(`Error refreshing signed URL for short ${short.id}:`, error);
-            }
-          }
-          return short;
-        }));
-        
-        setShorts(updatedShorts);
+      if (!data || data.length === 0) {
+        setShorts([]);
+        setIsLoading(false);
+        return;
       }
-
+      
+      // Instead of checking and refreshing each URL which can cause errors,
+      // let's ensure that shorts with valid data are properly displayed
+      const validShorts = data.filter(short => 
+        short.id && (short.url || short.file_path)
+      );
+      
+      setShorts(validShorts);
+      
       // Only show success toast when shorts are loaded, not when the array is empty
-      if (data && data.length > 0) {
+      if (validShorts.length > 0) {
         showToast.success(
           "Shorts Loaded",
-          `${data.length} shorts retrieved successfully`
+          `${validShorts.length} shorts retrieved successfully`
         );
       }
     } catch (error) {
@@ -81,35 +59,7 @@ export const useShorts = () => {
       const shortToDelete = shorts.find(s => s.id === shortId);
       if (!shortToDelete) return;
 
-      // Delete the file from storage if file_path exists
-      if (shortToDelete.file_path) {
-        try {
-          // Check if file exists before attempting deletion
-          const { data: fileExists } = await supabase.storage
-            .from('shorts')
-            .list(shortToDelete.file_path.split('/').slice(0, -1).join('/') || '');
-            
-          const fileName = shortToDelete.file_path.split('/').pop();
-          const fileExistsInBucket = fileExists?.some(file => file.name === fileName);
-          
-          if (fileExistsInBucket) {
-            const { error: storageError } = await supabase.storage
-              .from('shorts')
-              .remove([shortToDelete.file_path]);
-
-            if (storageError) {
-              console.warn("Error removing file from storage:", storageError);
-              // Continue with DB deletion even if storage deletion fails
-            }
-          } else {
-            console.log(`File does not exist at path: ${shortToDelete.file_path}`);
-          }
-        } catch (error) {
-          console.warn("Error checking file existence:", error);
-        }
-      }
-
-      // Delete from database
+      // Delete from database first
       const { error } = await supabase
         .from('shorts')
         .delete()
@@ -124,6 +74,21 @@ export const useShorts = () => {
         "Short Deleted",
         "The short has been successfully deleted"
       );
+      
+      // Then try to delete the file if it exists (but don't block on this)
+      if (shortToDelete.file_path) {
+        try {
+          const { error: storageError } = await supabase.storage
+            .from('shorts')
+            .remove([shortToDelete.file_path]);
+
+          if (storageError) {
+            console.warn("Error removing file from storage:", storageError);
+          }
+        } catch (error) {
+          console.warn("Error checking file existence:", error);
+        }
+      }
     } catch (error) {
       console.error("Error deleting short:", error);
       showToast.error(
@@ -135,47 +100,14 @@ export const useShorts = () => {
 
   const handleDownload = async (short: Short) => {
     try {
-      if (!short.file_path) {
-        showToast.error("Download Failed", "No file path available for this short");
+      if (!short.url) {
+        showToast.error("Download Failed", "No URL available for this short");
         return;
       }
 
-      console.log("Attempting to download file from path:", short.file_path);
-      
-      // Check if file exists before creating signed URL
-      try {
-        const { data: fileExists } = await supabase.storage
-          .from('shorts')
-          .list(short.file_path.split('/').slice(0, -1).join('/') || '');
-          
-        const fileName = short.file_path.split('/').pop();
-        const fileExistsInBucket = fileExists?.some(file => file.name === fileName);
-        
-        if (!fileExistsInBucket) {
-          throw new Error(`File does not exist at path: ${short.file_path}`);
-        }
-      } catch (error) {
-        console.error("Error checking file existence:", error);
-        throw new Error("Failed to verify file existence");
-      }
-      
-      // Get a fresh signed URL for the file
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-        .from('shorts')
-        .createSignedUrl(short.file_path, 60); // 1 minute expiry for download
-        
-      if (signedUrlError) {
-        console.error("Error creating signed URL:", signedUrlError);
-        throw new Error("Failed to generate download link");
-      }
-      
-      if (!signedUrlData || !signedUrlData.signedUrl) {
-        throw new Error("No signed URL received from server");
-      }
-      
-      // Create a hidden anchor and trigger download
+      // Create a hidden anchor and trigger download using the existing URL
       const a = document.createElement('a');
-      a.href = signedUrlData.signedUrl;
+      a.href = short.url;
       a.download = `${short.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
       document.body.appendChild(a);
       a.click();
@@ -194,34 +126,6 @@ export const useShorts = () => {
   const handleShare = async (short: Short) => {
     try {
       let shareUrl = short.url;
-      
-      // If we have a file_path but no URL, try to get a fresh signed URL for sharing
-      if (!shareUrl && short.file_path) {
-        try {
-          // Check if file exists before creating signed URL
-          const { data: fileExists } = await supabase.storage
-            .from('shorts')
-            .list(short.file_path.split('/').slice(0, -1).join('/') || '');
-            
-          const fileName = short.file_path.split('/').pop();
-          const fileExistsInBucket = fileExists?.some(file => file.name === fileName);
-          
-          if (fileExistsInBucket) {
-            const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-              .from('shorts')
-              .createSignedUrl(short.file_path, 604800); // 7 days for sharing
-              
-            if (!signedUrlError && signedUrlData && signedUrlData.signedUrl) {
-              shareUrl = signedUrlData.signedUrl;
-            }
-          } else {
-            throw new Error(`File does not exist at path: ${short.file_path}`);
-          }
-        } catch (error) {
-          console.error("Error checking file existence:", error);
-          throw new Error("Could not verify file exists for sharing");
-        }
-      }
       
       if (!shareUrl) {
         throw new Error("No URL available to share");

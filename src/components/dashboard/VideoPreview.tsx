@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scissors, RefreshCw, Check, Clock, AlertCircle, Video } from "lucide-react";
@@ -259,7 +260,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           {processingStatus === "success" && generatedShorts.length > 0 && (
             <div className="mt-4 w-full">
               <p className="text-sm font-medium mb-2">Generated Shorts:</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {generatedShorts.map(short => (
                   <ShortPreviewCard key={short.id} short={short} />
                 ))}
@@ -268,24 +269,6 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           )}
         </CardFooter>
       </Card>
-
-      {processingStatus === "success" && generatedShorts.length > 0 && false && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Generated Shorts</CardTitle>
-            <CardDescription>
-              These shorts were created from your video
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {generatedShorts.map(short => (
-                <ShortPreviewCard key={short.id} short={short} />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };
