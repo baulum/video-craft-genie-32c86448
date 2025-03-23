@@ -12,6 +12,7 @@ export type Short = Database['public']['Tables']['shorts']['Row'] & {
     title: string;
     thumbnail_url: string | null;
   } | null;
+  url?: string; // Add the url property that might come from the frontend
 };
 export type ShortInsert = Database['public']['Tables']['shorts']['Insert'];
 export type ShortUpdate = Database['public']['Tables']['shorts']['Update'];

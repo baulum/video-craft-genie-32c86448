@@ -254,7 +254,13 @@ export const ShortsGallery = () => {
                     variant="secondary" 
                     size="sm"
                     onClick={() => {
-                      window.open(short.url || '#', '_blank');
+                      // Instead of using short.url which doesn't exist in the type
+                      // Generate a preview URL from the file_path if it exists
+                      const previewUrl = short.file_path 
+                        ? supabase.storage.from('shorts').getPublicUrl(short.file_path).data?.publicUrl 
+                        : "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+                      
+                      window.open(previewUrl, '_blank');
                     }}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
