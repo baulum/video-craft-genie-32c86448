@@ -12,6 +12,7 @@ export type Database = {
       shorts: {
         Row: {
           created_at: string | null
+          description: string | null
           duration: string | null
           file_path: string | null
           id: string
@@ -23,6 +24,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          description?: string | null
           duration?: string | null
           file_path?: string | null
           id?: string
@@ -34,6 +36,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          description?: string | null
           duration?: string | null
           file_path?: string | null
           id?: string

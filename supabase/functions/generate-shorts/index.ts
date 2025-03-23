@@ -339,7 +339,7 @@ serve(async (req) => {
           // Add to shorts data for database
           shortsData.push({
             title: shortTitle,
-            description: segment.description,
+            description: segment.description || "No description provided", // Make sure description is set
             duration: duration,
             timestamp: segment.timestamp,
             thumbnail_url: thumbnailUrl,
