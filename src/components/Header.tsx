@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -22,7 +23,9 @@ export function Header() {
     }`}>
       <div className="container flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">ClipFarm</span>
+          <Link to="/" className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">
+            ClipFarm
+          </Link>
         </div>
         
         {/* Desktop navigation */}
@@ -34,8 +37,12 @@ export function Header() {
         </nav>
         
         <div className="hidden md:flex items-center gap-4">
-          <Button variant="outline" className="font-medium">Login</Button>
-          <Button className="font-medium bg-gradient-to-r from-purple-600 to-blue-500 text-white">Sign Up Free</Button>
+          <Link to="/login">
+            <Button variant="outline" className="font-medium">Login</Button>
+          </Link>
+          <Link to="/register">
+            <Button className="font-medium bg-gradient-to-r from-purple-600 to-blue-500 text-white">Sign Up Free</Button>
+          </Link>
         </div>
         
         {/* Mobile menu button */}
@@ -55,8 +62,12 @@ export function Header() {
           <a href="#testimonials" className="text-gray-700 py-2 hover:text-gray-900 font-medium">Testimonials</a>
           <a href="#pricing" className="text-gray-700 py-2 hover:text-gray-900 font-medium">Pricing</a>
           <div className="flex flex-col gap-2 pt-2">
-            <Button variant="outline" className="w-full font-medium">Login</Button>
-            <Button className="w-full font-medium bg-gradient-to-r from-purple-600 to-blue-500 text-white">Sign Up Free</Button>
+            <Link to="/login">
+              <Button variant="outline" className="w-full font-medium">Login</Button>
+            </Link>
+            <Link to="/register">
+              <Button className="w-full font-medium bg-gradient-to-r from-purple-600 to-blue-500 text-white">Sign Up Free</Button>
+            </Link>
           </div>
         </div>
       )}
