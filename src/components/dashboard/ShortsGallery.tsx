@@ -71,35 +71,39 @@ export const ShortsGallery = () => {
     try {
       setDownloading(shortId);
       
-      // In a real app with Supabase Storage set up, we would use:
+      // Create a signed URL for downloading
       const { data, error } = await supabase.storage
         .from('shorts')
-        .download(filePath);
+        .createSignedUrl(filePath, 60); // URL valid for 60 seconds
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating signed URL:', error);
+        throw error;
+      }
+      
+      if (!data?.signedUrl) {
+        throw new Error('No signed URL returned');
+      }
       
       // Create a download link and trigger the download
-      if (data) {
-        const url = URL.createObjectURL(data);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filePath.split('/').pop() || 'short-video.mp4';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        toast({
-          title: "Download Complete",
-          description: "Your short video has been downloaded successfully!",
-          variant: "default",
-        });
-      }
+      const downloadUrl = data.signedUrl;
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = filePath.split('/').pop() || 'short-video.mp4';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Download Started",
+        description: "Your short video download has started!",
+        variant: "default",
+      });
     } catch (error) {
       console.error('Error downloading short:', error);
       toast({
         title: "Download Failed",
-        description: "There was an error downloading your short video. Please try again.",
+        description: "There was an error downloading your short video. The file may not exist in storage.",
         variant: "destructive",
       });
     } finally {
@@ -206,7 +210,7 @@ export const ShortsGallery = () => {
                     variant="secondary" 
                     size="sm" 
                     onClick={() => handleDownload(short.id, short.file_path || '')}
-                    disabled={downloading === short.id}
+                    disabled={downloading === short.id || !short.file_path}
                   >
                     {downloading === short.id ? (
                       <>
