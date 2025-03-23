@@ -7,6 +7,7 @@ import { Download, Share, Trash2, Play, Pause, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { showToast } from "@/utils/toast-helper";
 import { Short } from "@/types/supabase";
+import { ShortPreviewCard } from "./ShortPreviewCard";
 
 export const ShortsGallery = () => {
   const [activeTab, setActiveTab] = useState("all");
@@ -205,7 +206,7 @@ export const ShortsGallery = () => {
       
       // Update local state
       setShorts(shorts.map(short => 
-        short.id === shortId ? { ...short, views: short.views + 1 } : short
+        short.id === shortId ? { ...short, views: (short.views || 0) + 1 } : short
       ));
     } catch (error) {
       console.error("Error incrementing views:", error);
@@ -279,7 +280,7 @@ export const ShortsGallery = () => {
                   short={short}
                   isPlaying={playing === short.id}
                   onPlayPause={() => handlePlayPause(short.id)}
-                  onDelete={() => handleDelete(short)}
+                  onDelete={() => handleDelete(short.id)}
                   onDownload={() => handleDownload(short)}
                   onShare={() => handleShare(short)}
                 />
