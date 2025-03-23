@@ -57,6 +57,7 @@ export type Database = {
         Row: {
           created_at: string | null
           duration: string | null
+          error_message: string | null
           file_path: string | null
           id: string
           source: string
@@ -70,6 +71,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           duration?: string | null
+          error_message?: string | null
           file_path?: string | null
           id?: string
           source: string
@@ -83,6 +85,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           duration?: string | null
+          error_message?: string | null
           file_path?: string | null
           id?: string
           source?: string

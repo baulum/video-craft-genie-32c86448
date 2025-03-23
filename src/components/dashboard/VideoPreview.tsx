@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scissors, RefreshCw, Download, Check, Clock, AlertCircle } from "lucide-react";
@@ -179,28 +178,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row gap-4">
-          {processingStatus === "processing" ? (
-            <div className="flex items-center space-x-2 text-amber-500">
-              <Clock className="h-4 w-4 animate-pulse" />
-              <span>Processing your video...</span>
-            </div>
-          ) : processingStatus === "success" ? (
-            <div className="flex items-center space-x-2 text-green-500">
-              <Check className="h-4 w-4" />
-              <span>Shorts generated successfully!</span>
-            </div>
-          ) : processingStatus === "error" ? (
-            <Alert variant="destructive" className="w-full">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {errorMessage || "Failed to generate shorts. Please try again."}
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <div className="text-sm text-gray-500">
-              Ready to create shorts from this video
-            </div>
-          )}
+          {getProcessingStatusUI()}
           <Button 
             onClick={handleGenerateShorts} 
             disabled={isProcessing || processingStatus === "success"}
