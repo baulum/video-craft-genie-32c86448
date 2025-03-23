@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Short } from "@/types/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Scissors, Download, Share2, ExternalLink, Loader2 } from "lucide-react";
+import { Scissors, Download, Share2, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 
@@ -144,7 +144,9 @@ export const ShortsGallery = () => {
           <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
             Upload a video and let our AI generate engaging short-form content for you automatically.
           </p>
-          <Button as={Link} to="/dashboard?tab=upload">Upload a Video</Button>
+          <Link to="/dashboard?tab=upload">
+            <Button>Upload a Video</Button>
+          </Link>
         </div>
       </div>
     );
