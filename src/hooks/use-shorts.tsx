@@ -28,12 +28,24 @@ export const useShorts = () => {
           // If url exists but might be expired, refresh it
           if (short.file_path) {
             try {
-              const { data: { signedUrl } } = await supabase.storage
+              // Check if file exists before creating signed URL
+              const { data: fileExists } = await supabase.storage
                 .from('shorts')
-                .createSignedUrl(short.file_path, 604800); // 7 days
+                .list(short.file_path.split('/').slice(0, -1).join('/') || '');
                 
-              if (signedUrl) {
-                return { ...short, url: signedUrl };
+              const fileName = short.file_path.split('/').pop();
+              const fileExistsInBucket = fileExists?.some(file => file.name === fileName);
+              
+              if (fileExistsInBucket) {
+                const { data: signedUrlData } = await supabase.storage
+                  .from('shorts')
+                  .createSignedUrl(short.file_path, 604800); // 7 days
+                  
+                if (signedUrlData?.signedUrl) {
+                  return { ...short, url: signedUrlData.signedUrl };
+                }
+              } else {
+                console.log(`File does not exist at path: ${short.file_path}`);
               }
             } catch (error) {
               console.error(`Error refreshing signed URL for short ${short.id}:`, error);
@@ -45,10 +57,13 @@ export const useShorts = () => {
         setShorts(updatedShorts);
       }
 
-      showToast.success(
-        "Shorts Loaded",
-        `${data?.length || 0} shorts retrieved successfully`
-      );
+      // Only show success toast when shorts are loaded, not when the array is empty
+      if (data && data.length > 0) {
+        showToast.success(
+          "Shorts Loaded",
+          `${data.length} shorts retrieved successfully`
+        );
+      }
     } catch (error) {
       console.error("Error fetching shorts:", error);
       showToast.error(
@@ -68,13 +83,29 @@ export const useShorts = () => {
 
       // Delete the file from storage if file_path exists
       if (shortToDelete.file_path) {
-        const { error: storageError } = await supabase.storage
-          .from('shorts')
-          .remove([shortToDelete.file_path]);
+        try {
+          // Check if file exists before attempting deletion
+          const { data: fileExists } = await supabase.storage
+            .from('shorts')
+            .list(shortToDelete.file_path.split('/').slice(0, -1).join('/') || '');
+            
+          const fileName = shortToDelete.file_path.split('/').pop();
+          const fileExistsInBucket = fileExists?.some(file => file.name === fileName);
+          
+          if (fileExistsInBucket) {
+            const { error: storageError } = await supabase.storage
+              .from('shorts')
+              .remove([shortToDelete.file_path]);
 
-        if (storageError) {
-          console.warn("Error removing file from storage:", storageError);
-          // Continue with DB deletion even if storage deletion fails
+            if (storageError) {
+              console.warn("Error removing file from storage:", storageError);
+              // Continue with DB deletion even if storage deletion fails
+            }
+          } else {
+            console.log(`File does not exist at path: ${shortToDelete.file_path}`);
+          }
+        } catch (error) {
+          console.warn("Error checking file existence:", error);
         }
       }
 
@@ -111,6 +142,23 @@ export const useShorts = () => {
 
       console.log("Attempting to download file from path:", short.file_path);
       
+      // Check if file exists before creating signed URL
+      try {
+        const { data: fileExists } = await supabase.storage
+          .from('shorts')
+          .list(short.file_path.split('/').slice(0, -1).join('/') || '');
+          
+        const fileName = short.file_path.split('/').pop();
+        const fileExistsInBucket = fileExists?.some(file => file.name === fileName);
+        
+        if (!fileExistsInBucket) {
+          throw new Error(`File does not exist at path: ${short.file_path}`);
+        }
+      } catch (error) {
+        console.error("Error checking file existence:", error);
+        throw new Error("Failed to verify file existence");
+      }
+      
       // Get a fresh signed URL for the file
       const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from('shorts')
@@ -145,16 +193,33 @@ export const useShorts = () => {
 
   const handleShare = async (short: Short) => {
     try {
-      // Get a fresh signed URL that lasts longer for sharing
       let shareUrl = short.url;
       
-      if (short.file_path) {
-        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-          .from('shorts')
-          .createSignedUrl(short.file_path, 604800); // 7 days for sharing
+      // If we have a file_path but no URL, try to get a fresh signed URL for sharing
+      if (!shareUrl && short.file_path) {
+        try {
+          // Check if file exists before creating signed URL
+          const { data: fileExists } = await supabase.storage
+            .from('shorts')
+            .list(short.file_path.split('/').slice(0, -1).join('/') || '');
+            
+          const fileName = short.file_path.split('/').pop();
+          const fileExistsInBucket = fileExists?.some(file => file.name === fileName);
           
-        if (!signedUrlError && signedUrlData && signedUrlData.signedUrl) {
-          shareUrl = signedUrlData.signedUrl;
+          if (fileExistsInBucket) {
+            const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+              .from('shorts')
+              .createSignedUrl(short.file_path, 604800); // 7 days for sharing
+              
+            if (!signedUrlError && signedUrlData && signedUrlData.signedUrl) {
+              shareUrl = signedUrlData.signedUrl;
+            }
+          } else {
+            throw new Error(`File does not exist at path: ${short.file_path}`);
+          }
+        } catch (error) {
+          console.error("Error checking file existence:", error);
+          throw new Error("Could not verify file exists for sharing");
         }
       }
       
@@ -177,6 +242,7 @@ export const useShorts = () => {
       }
     } catch (error) {
       console.error("Error sharing:", error);
+      // Don't show error if user canceled the share dialog
       if (error instanceof Error && error.name !== 'AbortError') {
         showToast.error(
           "Share Failed", 
@@ -188,10 +254,14 @@ export const useShorts = () => {
 
   const incrementViews = async (shortId: string) => {
     try {
+      // Find the current short to get its views count
+      const currentShort = shorts.find(s => s.id === shortId);
+      if (!currentShort) return;
+      
       // Update views count in database
       await supabase
         .from('shorts')
-        .update({ views: shorts.find(s => s.id === shortId)?.views + 1 || 1 })
+        .update({ views: (currentShort.views || 0) + 1 })
         .eq('id', shortId);
       
       // Update local state
