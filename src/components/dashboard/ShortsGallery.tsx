@@ -71,10 +71,8 @@ export const ShortsGallery = () => {
     try {
       setDownloading(shortId);
       
-      // Fix the path - remove redundant 'shorts/' prefix if it exists
-      const correctPath = filePath.startsWith('shorts/') 
-        ? filePath
-        : `shorts/${filePath}`;
+      // Ensure the filePath doesn't have a duplicate 'shorts/' prefix
+      const correctPath = filePath.replace(/^shorts\//, '');
       
       console.log(`Attempting to download file: ${correctPath}`);
       

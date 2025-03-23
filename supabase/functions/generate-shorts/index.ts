@@ -109,9 +109,26 @@ serve(async (req) => {
         // Use the correct path format for storing in Supabase storage
         const shortsData = []
         
+        // First, check if the shorts bucket exists, create it if it doesn't
+        try {
+          const { data: bucketExists } = await supabaseClient.storage.getBucket('shorts')
+          
+          if (!bucketExists) {
+            console.log('Creating shorts bucket...')
+            await supabaseClient.storage.createBucket('shorts', {
+              public: true,
+              fileSizeLimit: 52428800 // 50MB limit
+            })
+          }
+        } catch (error) {
+          console.log('Bucket already exists or error checking bucket:', error.message)
+          // Continue as the bucket might already exist
+        }
+        
         // Generate placeholder video content (in a real app, this would be actual video content)
         for (let i = 0; i < shortTopics.length; i++) {
           const shortTitle = `${shortTopics[i]} - ${video.title.substring(0, 30)}${video.title.length > 30 ? '...' : ''}`
+          // IMPORTANT: Don't include 'shorts/' in the file path - the bucket name is already 'shorts'
           const filePath = `${videoId}/short_${i + 1}.mp4`
           
           // Create a simple buffer with text data to simulate a video file
@@ -139,7 +156,7 @@ serve(async (req) => {
             title: shortTitle,
             duration: durations[i],
             thumbnail_url: thumbnailUrl,
-            file_path: filePath,
+            file_path: filePath,  // Store the correct path without bucket name prefix
             video_id: videoId,
             views: 0
           })
