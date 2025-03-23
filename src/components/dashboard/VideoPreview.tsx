@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scissors, RefreshCw, Check, Clock, AlertCircle, Video } from "lucide-react";
@@ -157,6 +158,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
     setProcessingProgress(10); // Start with some progress
     
     try {
+      // Call the edge function to process the video
       const { data, error } = await supabase.functions.invoke('generate-shorts', {
         body: { videoId: video.id }
       });

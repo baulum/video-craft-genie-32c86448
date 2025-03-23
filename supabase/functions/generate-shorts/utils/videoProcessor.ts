@@ -1,14 +1,13 @@
 
-import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.10";
-import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.1";
+import { generateFallbackThumbnail, dataURLtoBuffer } from "./videoProcessor";
 
 /**
- * Create a real video segment from the original video using FFmpeg
+ * Create a video segment using the external Flask backend
  * @param videoId ID of the parent video
  * @param segmentData Segment data with title, timestamp, etc.
  * @param videoUrl URL of the original video
  * @param supabaseClient Supabase client instance
- * @returns Video and thumbnail buffers with metadata
+ * @returns Video and thumbnail metadata
  */
 export async function createVideoSegment(videoId: string, segmentData: any, videoUrl: string, supabaseClient: any) {
   console.log(`Creating video segment: ${segmentData.title}`);
@@ -20,38 +19,18 @@ export async function createVideoSegment(videoId: string, segmentData: any, vide
     
     console.log(`Processing segment from ${startTime}s to ${endTime}s (duration: ${duration}s)`);
     
-    // Initialize FFmpeg instance with worker: false to avoid the Worker error
-    const ffmpeg = new FFmpeg();
-    const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+    // For now, we'll generate fallback responses as we're migrating to the Flask backend
+    // The Flask backend will handle the actual video processing
+    console.log(`Using fallback response while Flask backend is being set up`);
     
-    console.log("Loading FFmpeg without workers...");
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      worker: false // Explicitly disable web workers
-    });
-    console.log("FFmpeg loaded successfully");
-    
-    // Since we can't actually process videos in the Edge Function due to resource constraints,
-    // let's generate a fallback response for demonstration purposes
-    console.log(`Edge Functions have limited resources for video processing. Creating a fallback response.`);
-    
-    // Generate simple placeholder data instead of actual video processing
-    // In a production environment, you might want to:
-    // 1. Use a more powerful backend service for video processing
-    // 2. Queue the video processing job to be handled asynchronously
-    // 3. Use a dedicated video processing service
-    
-    // Create small placeholder buffer for demonstration
-    const placeholderVideoBuffer = new Uint8Array(1024); // Just a placeholder
-    const placeholderThumbnailBuffer = new Uint8Array(512); // Just a placeholder
-    
-    // Log the fallback approach
-    console.log(`Created placeholder buffers for demonstration. In production, use a dedicated video processing service.`);
+    // Generate fallback thumbnail
+    console.log(`Generating fallback thumbnail for: ${segmentData.title}`);
+    const fallbackThumb = generateFallbackThumbnail(segmentData.title);
+    const fallbackBuffer = dataURLtoBuffer(fallbackThumb);
     
     return {
-      videoBuffer: placeholderVideoBuffer,
-      thumbnailBuffer: placeholderThumbnailBuffer,
+      videoBuffer: new Uint8Array(1024), // Just a placeholder until Flask backend is working
+      thumbnailBuffer: fallbackBuffer,
       metadata: {
         title: segmentData.title,
         description: segmentData.description,
