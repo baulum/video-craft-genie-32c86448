@@ -1,394 +1,337 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Short } from "@/types/supabase";
-import { Card, CardContent } from "@/components/ui/card";
+
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Scissors, Download, Share2, ExternalLink, Loader2, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Download, Share, Trash2, Play, Pause, Eye } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { showToast } from "@/utils/toast-helper";
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+
+interface Short {
+  id: string;
+  title: string;
+  description?: string;
+  timestamp?: string;
+  duration?: string;
+  url: string;
+  file_path?: string;
+  thumbnail_url?: string;
+  views: number;
+  video_id?: string;
+}
 
 export const ShortsGallery = () => {
+  const [activeTab, setActiveTab] = useState("all");
   const [shorts, setShorts] = useState<Short[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [playing, setPlaying] = useState<string | null>(null);
 
   useEffect(() => {
-    loadShorts();
-
-    // Set up real-time subscription for new shorts
-    const channel = supabase
-      .channel('public:shorts')
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'shorts' 
-      }, (payload) => {
-        const newShort = payload.new as Short;
-        setShorts(currentShorts => [newShort, ...currentShorts]);
-        showToast.success("New Short Ready", "A new short video has been generated and is ready to view!");
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    fetchShorts();
   }, []);
 
-  const loadShorts = async () => {
+  const fetchShorts = async () => {
     try {
-      setLoading(true);
-      console.log("Fetching shorts from Supabase...");
-      
+      setIsLoading(true);
       const { data, error } = await supabase
         .from('shorts')
-        .select(`
-          *,
-          videos:video_id (
-            title,
-            thumbnail_url
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error("Error loading shorts:", error);
-        throw error;
-      }
-      
-      console.log(`Successfully loaded ${data?.length || 0} shorts`);
+
+      if (error) throw error;
+
       setShorts(data || []);
+      showToast.success(
+        "Shorts Loaded",
+        `${data?.length || 0} shorts retrieved successfully`
+      );
     } catch (error) {
-      console.error('Error loading shorts:', error);
+      console.error("Error fetching shorts:", error);
       showToast.error(
         "Failed to Load Shorts",
-        "There was an error loading your shorts. Please try again."
+        error instanceof Error ? error.message : "An error occurred loading your shorts"
       );
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleDownload = async (shortId: string, filePath: string) => {
+  const handleDelete = async (shortId: string) => {
     try {
-      setDownloading(shortId);
-      
-      if (!filePath) {
-        throw new Error("File path is missing");
+      // Find the short to get the file path
+      const shortToDelete = shorts.find(s => s.id === shortId);
+      if (!shortToDelete) return;
+
+      // Delete the file from storage if file_path exists
+      if (shortToDelete.file_path) {
+        const { error: storageError } = await supabase.storage
+          .from('shorts')
+          .remove([shortToDelete.file_path]);
+
+        if (storageError) {
+          console.warn("Error removing file from storage:", storageError);
+          // Continue with DB deletion even if storage deletion fails
+        }
       }
-      
-      console.log(`Attempting to download file: ${filePath}`);
-      
-      // Check if file exists in storage
-      const { data: fileCheck, error: fileCheckError } = await supabase
-        .storage
+
+      // Delete from database
+      const { error } = await supabase
         .from('shorts')
-        .list(filePath.split('/')[0] || '');
-        
-      if (fileCheckError) {
-        console.error('Error checking file existence:', fileCheckError);
-        throw new Error('Error checking if file exists');
-      }
+        .delete()
+        .eq('id', shortId);
+
+      if (error) throw error;
+
+      // Update local state
+      setShorts(shorts.filter(short => short.id !== shortId));
       
-      // If the file doesn't exist in storage, show appropriate message
-      const fileExists = fileCheck && fileCheck.some(item => 
-        item.name === filePath.split('/').pop()
+      showToast.success(
+        "Short Deleted",
+        "The short has been successfully deleted"
       );
-      
-      if (!fileExists) {
-        showToast.error(
-          "Download Failed",
-          "The file doesn't exist in storage. Please regenerate the short."
-        );
+    } catch (error) {
+      console.error("Error deleting short:", error);
+      showToast.error(
+        "Delete Failed",
+        error instanceof Error ? error.message : "Failed to delete the short"
+      );
+    }
+  };
+
+  const handleDownload = async (short: Short) => {
+    try {
+      if (!short.file_path) {
+        showToast.error("Download Failed", "No file path available for this short");
         return;
       }
-      
-      // Generate a signed URL with custom headers for force download
-      const { data, error } = await supabase
-        .storage
+
+      // Get a signed URL that expires after a short time
+      const { data, error } = await supabase.storage
         .from('shorts')
-        .createSignedUrl(filePath, 60, {
-          download: true,
-          transform: {
-            quality: 75
-          }
-        });
+        .createSignedUrl(short.file_path, 60); // 60 seconds expiry
+
+      if (error) throw error;
       
-      if (error || !data?.signedUrl) {
-        throw new Error('Could not generate download URL');
+      if (!data.signedUrl) {
+        throw new Error("Failed to generate download URL");
       }
-      
-      // Create a hidden anchor element to trigger the download
-      const fileName = `short-${shortId}.mp4`;
+
+      // Create a hidden anchor and trigger download
       const a = document.createElement('a');
       a.href = data.signedUrl;
-      a.download = fileName;
-      a.style.display = 'none';
+      a.download = `${short.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       
-      showToast.success(
-        "Download Started",
-        "Your short video download has started!"
-      );
+      showToast.success("Download Started", "Your short is being downloaded");
     } catch (error) {
-      console.error('Error downloading short:', error);
+      console.error("Error downloading short:", error);
       showToast.error(
         "Download Failed",
-        "There was an error downloading your short video."
+        error instanceof Error ? error.message : "Failed to download the short"
       );
-    } finally {
-      setDownloading(null);
     }
   };
 
-  const deleteShort = async (shortId: string, filePath: string | null) => {
+  const handleShare = async (short: Short) => {
     try {
-      setDeleting(shortId);
-      console.log(`Deleting short: ${shortId}`);
-      
-      // If there's a file path, attempt to delete from storage
-      if (filePath) {
-        console.log(`Attempting to delete file: ${filePath}`);
-        const { error: storageError } = await supabase
-          .storage
-          .from('shorts')
-          .remove([filePath]);
-          
-        if (storageError) {
-          console.error('Error removing file from storage:', storageError);
-          // Continue with deletion even if file removal fails
-        }
-      }
-      
-      // Delete short from database
-      const { error: deleteError } = await supabase
-        .from('shorts')
-        .delete()
-        .eq('id', shortId);
+      if (navigator.share && short.url) {
+        await navigator.share({
+          title: short.title,
+          text: short.description || `Check out this short: ${short.title}`,
+          url: short.url
+        });
         
-      if (deleteError) {
-        console.error('Error deleting short from database:', deleteError);
-        throw deleteError;
+        showToast.success("Shared Successfully", "Your short has been shared");
+      } else if (short.url) {
+        // Fallback for browsers that don't support the Web Share API
+        await navigator.clipboard.writeText(short.url);
+        showToast.success("Link Copied", "Short URL copied to clipboard");
+      } else {
+        throw new Error("No URL available to share");
       }
-      
-      // Update state to remove deleted short
-      setShorts(shorts.filter(short => short.id !== shortId));
-      
-      showToast({
-        title: "Short Deleted",
-        description: "The short video has been successfully deleted.",
-      });
     } catch (error) {
-      console.error('Error deleting short:', error);
-      showToast({
-        title: "Delete Failed",
-        description: "There was an error deleting the short video. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setDeleting(null);
-    }
-  };
-
-  const shareShort = (shortId: string) => {
-    // In a real app, generate a shareable link
-    const shareUrl = `${window.location.origin}/shorts/${shortId}`;
-    
-    // Use Web Share API if available
-    if (navigator.share) {
-      navigator.share({
-        title: 'Check out this short video!',
-        url: shareUrl
-      }).catch(err => {
-        console.error('Error sharing:', err);
-        // Fallback - copy to clipboard
-        copyToClipboard(shareUrl);
-      });
-    } else {
-      // Fallback - copy to clipboard
-      copyToClipboard(shareUrl);
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(
-      () => {
-        showToast.success("Link Copied", "Share link copied to clipboard!");
-      },
-      () => {
-        showToast.error("Copy Failed", "Failed to copy link. Please try again.", "destructive");
+      console.error("Error sharing:", error);
+      if (error instanceof Error && error.name !== 'AbortError') {
+        showToast.error(
+          "Share Failed", 
+          error.message
+        );
       }
-    );
+    }
   };
 
-  // If no shorts are available yet, show a placeholder
-  if (!loading && shorts.length === 0) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h2 className="text-2xl font-bold mb-4">Your Shorts</h2>
-        <div className="text-center py-12">
-          <Scissors className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-2">No shorts generated yet</h3>
-          <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-            Upload a video and let our AI generate engaging short-form content for you automatically.
-          </p>
-          <Link to="/dashboard?tab=upload">
-            <Button>Upload a Video</Button>
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const incrementViews = async (shortId: string) => {
+    try {
+      // Update views count in database
+      await supabase
+        .from('shorts')
+        .update({ views: shorts.find(s => s.id === shortId)?.views + 1 || 1 })
+        .eq('id', shortId);
+      
+      // Update local state
+      setShorts(shorts.map(short => 
+        short.id === shortId ? { ...short, views: short.views + 1 } : short
+      ));
+    } catch (error) {
+      console.error("Error incrementing views:", error);
+    }
+  };
+
+  const handlePlayPause = (shortId: string) => {
+    if (playing === shortId) {
+      setPlaying(null);
+    } else {
+      setPlaying(shortId);
+      incrementViews(shortId);
+    }
+  };
+
+  const filteredShorts = activeTab === "all" 
+    ? shorts 
+    : shorts.sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 10);
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Your Shorts</h2>
-        <Button variant="outline" size="sm" onClick={() => loadShorts()}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
+        <h1 className="text-2xl font-bold">Your Shorts Gallery</h1>
+        <Button onClick={fetchShorts} variant="outline" disabled={isLoading}>
+          {isLoading ? "Loading..." : "Refresh"}
         </Button>
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <div className="aspect-[9/16] bg-gray-200 dark:bg-gray-700 rounded-t-lg" />
-              <CardContent className="p-4">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2" />
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {shorts.map((short) => (
-            <Card key={short.id} className="overflow-hidden group">
-              <div className="relative aspect-[9/16] bg-gray-100 dark:bg-gray-800">
-                <img 
-                  src={short.videos?.thumbnail_url || short.thumbnail_url || "https://via.placeholder.com/640x360?text=Video+Short"}
-                  alt={short.title}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback to placeholder if image fails to load
-                    (e.target as HTMLImageElement).src = "https://via.placeholder.com/640x360?text=Video+Short";
-                  }}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="all">All Shorts</TabsTrigger>
+          <TabsTrigger value="popular">Top 10 Popular</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="all" className="pt-4">
+          {shorts.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-gray-500 dark:text-gray-400">
+                {isLoading ? "Loading shorts..." : "No shorts found. Generate some shorts from your videos!"}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {shorts.map(short => (
+                <ShortCard 
+                  key={short.id}
+                  short={short}
+                  isPlaying={playing === short.id}
+                  onPlayPause={() => handlePlayPause(short.id)}
+                  onDelete={() => handleDelete(short.id)}
+                  onDownload={() => handleDownload(short)}
+                  onShare={() => handleShare(short)}
                 />
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <Button 
-                    variant="secondary" 
-                    size="sm"
-                    onClick={() => {
-                      // Use short.url if it exists, or generate a preview URL from file_path
-                      const previewUrl = short.url || (short.file_path 
-                        ? supabase.storage.from('shorts').getPublicUrl(short.file_path).data?.publicUrl 
-                        : null);
-                      
-                      if (previewUrl) {
-                        window.open(previewUrl, '_blank');
-                      } else {
-                        showToast.error("Preview Not Available", "This short doesn't have a preview URL.");
-                      }
-                    }}
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Preview
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    onClick={() => handleDownload(short.id, short.file_path || '')}
-                    disabled={downloading === short.id}
-                  >
-                    {downloading === short.id ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Downloading...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4 mr-2" />
-                        Download
-                      </>
-                    )}
-                  </Button>
-                </div>
-                <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                  {short.duration || "00:30"}
-                </div>
-              </div>
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start">
-                  <h3 className="font-medium line-clamp-1">{short.title}</h3>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Short</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete this short? This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={() => deleteShort(short.id, short.file_path)}
-                          className="bg-red-500 hover:bg-red-600"
-                        >
-                          {deleting === short.id ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Deleting...
-                            </>
-                          ) : (
-                            "Delete"
-                          )}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(short.created_at || '').toLocaleDateString()}
-                  </span>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 w-8 p-0"
-                    onClick={() => shareShort(short.id)}
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              ))}
+            </div>
+          )}
+        </TabsContent>
+        
+        <TabsContent value="popular" className="pt-4">
+          {filteredShorts.length === 0 ? (
+            <div className="text-center py-10">
+              <p className="text-gray-500 dark:text-gray-400">
+                {isLoading ? "Loading shorts..." : "No shorts found."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredShorts.map(short => (
+                <ShortCard 
+                  key={short.id}
+                  short={short}
+                  isPlaying={playing === short.id}
+                  onPlayPause={() => handlePlayPause(short.id)}
+                  onDelete={() => handleDelete(short.id)}
+                  onDownload={() => handleDownload(short)}
+                  onShare={() => handleShare(short)}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
+  );
+};
+
+interface ShortCardProps {
+  short: Short;
+  isPlaying: boolean;
+  onPlayPause: () => void;
+  onDelete: () => void;
+  onDownload: () => void;
+  onShare: () => void;
+}
+
+const ShortCard = ({ short, isPlaying, onPlayPause, onDelete, onDownload, onShare }: ShortCardProps) => {
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-lg line-clamp-1">{short.title}</CardTitle>
+      </CardHeader>
+      
+      <CardContent className="p-0 aspect-[9/16] relative bg-gray-100 dark:bg-gray-800">
+        {isPlaying ? (
+          <video 
+            className="w-full h-full object-cover"
+            src={short.url}
+            autoPlay
+            controls
+          />
+        ) : (
+          <div className="relative w-full h-full flex items-center justify-center">
+            {short.thumbnail_url && (
+              <img 
+                src={short.thumbnail_url} 
+                alt={short.title}
+                className="w-full h-full object-cover absolute inset-0"
+              />
+            )}
+            <Button 
+              onClick={onPlayPause}
+              size="lg" 
+              className="rounded-full w-16 h-16 bg-black/30 hover:bg-black/50 backdrop-blur-sm"
+            >
+              <Play className="h-8 w-8" />
+            </Button>
+            
+            <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded flex items-center">
+              <Eye className="h-3 w-3 mr-1" />
+              {short.views || 0}
+            </div>
+            
+            {short.duration && (
+              <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                {short.duration}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+      
+      <CardFooter className="p-3 flex justify-between items-center">
+        <Button variant="ghost" size="sm" onClick={onPlayPause}>
+          {isPlaying ? <Pause className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
+          {isPlaying ? "Pause" : "Play"}
+        </Button>
+        
+        <div className="flex space-x-1">
+          <Button variant="ghost" size="icon" onClick={onShare}>
+            <Share className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onDownload}>
+            <Download className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onDelete}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardFooter>
+    </Card>
   );
 };
