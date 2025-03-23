@@ -1,6 +1,7 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Scissors, RefreshCw, Download, Check, Clock, AlertCircle } from "lucide-react";
+import { Scissors, RefreshCw, Check, Clock, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { showToast } from "@/utils/toast-helper";

@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Short } from "@/types/supabase";
@@ -6,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Scissors, Download, Share2, ExternalLink, Loader2, RefreshCw, Trash2, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
+import { showToast } from "@/utils/toast-helper";
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -38,10 +37,7 @@ export const ShortsGallery = () => {
       }, (payload) => {
         const newShort = payload.new as Short;
         setShorts(currentShorts => [newShort, ...currentShorts]);
-        toast({
-          title: "New Short Ready",
-          description: "A new short video has been generated and is ready to view!",
-        });
+        showToast.success("New Short Ready", "A new short video has been generated and is ready to view!");
       })
       .subscribe();
 
@@ -75,11 +71,10 @@ export const ShortsGallery = () => {
       setShorts(data || []);
     } catch (error) {
       console.error('Error loading shorts:', error);
-      toast({
-        title: "Failed to Load Shorts",
-        description: "There was an error loading your shorts. Please try again.",
-        variant: "destructive",
-      });
+      showToast.error(
+        "Failed to Load Shorts",
+        "There was an error loading your shorts. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -112,60 +107,48 @@ export const ShortsGallery = () => {
       );
       
       if (!fileExists) {
-        // For demo purposes, create a download link to a placeholder video
-        const placeholderUrl = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-        const a = document.createElement('a');
-        a.href = placeholderUrl;
-        a.download = `short-${shortId}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        toast({
-          title: "Using Demo Video",
-          description: "The actual file doesn't exist in storage yet. Using a placeholder video instead.",
-        });
+        showToast.error(
+          "Download Failed",
+          "The file doesn't exist in storage. Please regenerate the short."
+        );
         return;
       }
       
-      // Get the public URL for the file
-      const { data } = supabase
+      // Generate a signed URL with custom headers for force download
+      const { data, error } = await supabase
         .storage
         .from('shorts')
-        .getPublicUrl(filePath);
+        .createSignedUrl(filePath, 60, {
+          download: true,
+          transform: {
+            quality: 75
+          }
+        });
       
-      if (!data?.publicUrl) {
-        throw new Error('Could not generate public URL');
+      if (error || !data?.signedUrl) {
+        throw new Error('Could not generate download URL');
       }
       
-      // Create a temporary anchor element and trigger the download
+      // Create a hidden anchor element to trigger the download
+      const fileName = `short-${shortId}.mp4`;
       const a = document.createElement('a');
-      a.href = data.publicUrl;
-      a.download = filePath.split('/').pop() || 'short-video.mp4';
+      a.href = data.signedUrl;
+      a.download = fileName;
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       
-      toast({
-        title: "Download Started",
-        description: "Your short video download has started!",
-      });
+      showToast.success(
+        "Download Started",
+        "Your short video download has started!"
+      );
     } catch (error) {
       console.error('Error downloading short:', error);
-      toast({
-        title: "Download Failed",
-        description: "There was an error downloading your short video. Using a placeholder video instead.",
-        variant: "destructive",
-      });
-      
-      // Fallback to a placeholder video
-      const placeholderUrl = "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-      const a = document.createElement('a');
-      a.href = placeholderUrl;
-      a.download = `short-${shortId}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      showToast.error(
+        "Download Failed",
+        "There was an error downloading your short video."
+      );
     } finally {
       setDownloading(null);
     }
@@ -204,13 +187,13 @@ export const ShortsGallery = () => {
       // Update state to remove deleted short
       setShorts(shorts.filter(short => short.id !== shortId));
       
-      toast({
+      showToast({
         title: "Short Deleted",
         description: "The short video has been successfully deleted.",
       });
     } catch (error) {
       console.error('Error deleting short:', error);
-      toast({
+      showToast({
         title: "Delete Failed",
         description: "There was an error deleting the short video. Please try again.",
         variant: "destructive",
@@ -243,17 +226,10 @@ export const ShortsGallery = () => {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(
       () => {
-        toast({
-          title: "Link Copied",
-          description: "Share link copied to clipboard!",
-        });
+        showToast.success("Link Copied", "Share link copied to clipboard!");
       },
       () => {
-        toast({
-          title: "Copy Failed",
-          description: "Failed to copy link. Please try again.",
-          variant: "destructive",
-        });
+        showToast.error("Copy Failed", "Failed to copy link. Please try again.", "destructive");
       }
     );
   };
@@ -321,9 +297,13 @@ export const ShortsGallery = () => {
                       // Use short.url if it exists, or generate a preview URL from file_path
                       const previewUrl = short.url || (short.file_path 
                         ? supabase.storage.from('shorts').getPublicUrl(short.file_path).data?.publicUrl 
-                        : "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4");
+                        : null);
                       
-                      window.open(previewUrl, '_blank');
+                      if (previewUrl) {
+                        window.open(previewUrl, '_blank');
+                      } else {
+                        showToast.error("Preview Not Available", "This short doesn't have a preview URL.");
+                      }
                     }}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
