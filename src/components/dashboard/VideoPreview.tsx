@@ -31,7 +31,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
       try {
         const { data, error } = await supabase
           .from('videos')
-          .select('status')
+          .select('status, error_message')
           .eq('id', video.id)
           .single();
 
@@ -49,10 +49,10 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           } else if (data.status === 'error') {
             setProcessingStatus("error");
             setIsProcessing(false);
-            setErrorMessage("An error occurred during processing. Please try again.");
+            setErrorMessage(data.error_message || "An error occurred during processing. Please try again.");
             toast({
               title: "Processing Failed",
-              description: "There was an error generating your shorts.",
+              description: data.error_message || "There was an error generating your shorts.",
               variant: "destructive",
             });
           }
@@ -178,12 +178,33 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
             )}
           </div>
         </CardContent>
-        <CardFooter className="flex justify-between">
-          {getProcessingStatusUI()}
+        <CardFooter className="flex flex-col sm:flex-row gap-4">
+          {processingStatus === "processing" ? (
+            <div className="flex items-center space-x-2 text-amber-500">
+              <Clock className="h-4 w-4 animate-pulse" />
+              <span>Processing your video...</span>
+            </div>
+          ) : processingStatus === "success" ? (
+            <div className="flex items-center space-x-2 text-green-500">
+              <Check className="h-4 w-4" />
+              <span>Shorts generated successfully!</span>
+            </div>
+          ) : processingStatus === "error" ? (
+            <Alert variant="destructive" className="w-full">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {errorMessage || "Failed to generate shorts. Please try again."}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="text-sm text-gray-500">
+              Ready to create shorts from this video
+            </div>
+          )}
           <Button 
             onClick={handleGenerateShorts} 
             disabled={isProcessing || processingStatus === "success"}
-            className={processingStatus === "success" ? "bg-green-500 hover:bg-green-600" : ""}
+            className={`sm:ml-auto ${processingStatus === "success" ? "bg-green-500 hover:bg-green-600" : ""}`}
           >
             <Scissors className="h-4 w-4 mr-2" />
             {isProcessing ? "Processing..." : processingStatus === "success" ? "Shorts Generated" : "Generate Shorts"}

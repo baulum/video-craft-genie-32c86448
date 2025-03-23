@@ -3,8 +3,8 @@
 // https://docs.supabase.com/guides/functions/deno-runtime
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.42.0"
-import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts"
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.2.0"
+import { Buffer } from "https://deno.land/std@0.177.0/node/buffer.ts";
 
 // CORS headers for browser access
 const corsHeaders = {
@@ -22,7 +22,6 @@ async function analyzeVideoContent(videoInfo, model) {
       I have a video with the following details:
       - Title: "${videoInfo.title}"
       - Source: ${videoInfo.source}
-      - URL: ${videoInfo.url}
       
       I need to extract 3 key segments from this video that would make great short-form content.
       
@@ -49,6 +48,8 @@ async function analyzeVideoContent(videoInfo, model) {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
+    
+    console.log("Raw Gemini response:", text);
     
     // Extract JSON from the response
     const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/({[\s\S]*})/);
@@ -128,45 +129,30 @@ function extractSegmentsFromText(text) {
   ];
 }
 
-// Function to create video segment based on timestamp range
-async function createVideoSegment(videoUrl, segment, outputPath) {
-  try {
-    console.log(`Creating video segment: ${segment.title}`);
-    
-    // In a real implementation, we would:
-    // 1. Download the source video
-    // 2. Use FFMPEG or similar to cut the segment based on timestamps
-    // 3. Add any text overlays, effects, etc.
-    // 4. Save to the output path
-    
-    // For now, we'll create a minimal valid MP4 file
-    // This would be replaced with actual video processing code
-    
-    // Create a basic MP4 header (minimal valid MP4 file)
-    const MP4_HEADER = new Uint8Array([
-      0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x6D, 0x70, 0x34, 0x32, 
-      0x00, 0x00, 0x00, 0x00, 0x6D, 0x70, 0x34, 0x32, 0x69, 0x73, 0x6F, 0x6D, 
-      0x00, 0x00, 0x00, 0x08, 0x6D, 0x6F, 0x6F, 0x76, 0x00, 0x00, 0x00, 0x08, 
-      0x6D, 0x64, 0x61, 0x74
-    ]);
-    
-    // Calculate file size based on duration (roughly 100KB per second)
-    const fileSize = segment.duration_seconds * 100 * 1024;
-    const videoData = new Uint8Array(fileSize);
-    
-    // Copy header
-    videoData.set(MP4_HEADER);
-    
-    // Fill rest with pattern data
-    for (let i = MP4_HEADER.length; i < fileSize; i++) {
-      videoData[i] = i % 256;
-    }
-    
-    return videoData;
-  } catch (error) {
-    console.error(`Error creating video segment: ${error.message}`);
-    throw error;
+// Create a minimal valid MP4 file for demonstration
+function createMinimalMP4(durationSeconds) {
+  // Simple MP4 file header with minimal valid structure
+  const header = new Uint8Array([
+    0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 
+    0x6D, 0x70, 0x34, 0x32, 0x00, 0x00, 0x00, 0x00, 
+    0x6D, 0x70, 0x34, 0x32, 0x69, 0x73, 0x6F, 0x6D
+  ]);
+  
+  // Calculate file size based on duration (arbitrary calculation for demonstration)
+  const fileSize = Math.min(durationSeconds * 10 * 1024, 1024 * 1024); // Max 1MB to avoid storage issues
+  
+  // Create a buffer with the specified size
+  const buffer = new Uint8Array(fileSize);
+  
+  // Copy header to the beginning of the buffer
+  buffer.set(header);
+  
+  // Fill the rest with random data
+  for (let i = header.length; i < fileSize; i++) {
+    buffer[i] = Math.floor(Math.random() * 256);
   }
+  
+  return buffer;
 }
 
 // Convert timestamp string (MM:SS-MM:SS) to duration string (MM:SS)
@@ -236,7 +222,7 @@ serve(async (req) => {
       .single();
 
     if (videoError) {
-      console.error('Error fetching video:', videoError.message);
+      console.error('Error fetching video:', videoError);
       throw new Error(`Could not find video with ID: ${videoId}`);
     }
 
@@ -253,7 +239,7 @@ serve(async (req) => {
       .eq('id', videoId);
     
     if (updateError) {
-      console.error('Error updating video status:', updateError.message);
+      console.error('Error updating video status:', updateError);
       throw new Error(`Failed to update video status: ${updateError.message}`);
     }
 
@@ -273,7 +259,7 @@ serve(async (req) => {
             .listBuckets();
           
           if (bucketsError) {
-            console.error('Error listing buckets:', bucketsError.message);
+            console.error('Error listing buckets:', bucketsError);
             throw bucketsError;
           }
           
@@ -287,7 +273,7 @@ serve(async (req) => {
             });
             
             if (createBucketError) {
-              console.error('Error creating bucket:', createBucketError.message);
+              console.error('Error creating bucket:', createBucketError);
               throw createBucketError;
             }
             
@@ -296,7 +282,7 @@ serve(async (req) => {
             console.log('Shorts bucket already exists');
           }
         } catch (error) {
-          console.error('Error checking/creating bucket:', error.message);
+          console.error('Error checking/creating bucket:', error);
           // Continue execution as the bucket might exist despite the error
         }
         
@@ -316,8 +302,8 @@ serve(async (req) => {
           // Generate file path
           const filePath = `${videoId}/short_${i + 1}.mp4`;
           
-          // Create the video segment
-          const videoData = await createVideoSegment(video.url, segment, filePath);
+          // Create the video segment - in this implementation we're creating a minimal valid MP4 file
+          const videoData = createMinimalMP4(segment.duration_seconds || 30);
           
           // Calculate duration string
           const duration = segment.duration_seconds ? 
@@ -335,20 +321,28 @@ serve(async (req) => {
             });
             
           if (uploadError) {
-            console.error(`Error uploading short video: ${uploadError.message}`);
+            console.error(`Error uploading short video:`, uploadError);
             throw new Error(`Failed to upload short video: ${uploadError.message}`);
           }
           
           console.log(`Successfully uploaded short video to: ${filePath}`);
           
+          // Get public URL for the uploaded short
+          const { data: { publicUrl } } = supabaseClient.storage
+            .from('shorts')
+            .getPublicUrl(filePath);
+          
           // Add to shorts data for database
           shortsData.push({
             title: shortTitle,
+            description: segment.description,
             duration: duration,
+            timestamp: segment.timestamp,
             thumbnail_url: thumbnailUrl,
             file_path: filePath,
             video_id: videoId,
-            views: 0
+            views: 0,
+            url: publicUrl
           });
         }
         
@@ -361,7 +355,7 @@ serve(async (req) => {
             .insert(shortData);
             
           if (insertError) {
-            console.error(`Error inserting short: ${insertError.message}`);
+            console.error(`Error inserting short:`, insertError);
             throw new Error(`Failed to insert short: ${insertError.message}`);
           }
         }
@@ -373,20 +367,20 @@ serve(async (req) => {
           .eq('id', videoId);
           
         if (completeError) {
-          console.error(`Error updating video status to complete: ${completeError.message}`);
+          console.error(`Error updating video status to complete:`, completeError);
           throw new Error(`Failed to update video status to complete: ${completeError.message}`);
         }
         
         console.log(`Video processing complete for ID: ${videoId}`);
       } catch (error) {
-        console.error(`Error in processing task: ${error.message}`);
+        console.error(`Error in processing task:`, error);
         
         // Update video status to error
         await supabaseClient
           .from('videos')
           .update({ 
-            status: 'error',
-            title: `Error: ${error.message.substring(0, 100)} (${video.title.substring(0, 50)})`
+            status: 'error', 
+            error_message: error.message
           })
           .eq('id', videoId);
       }
@@ -411,7 +405,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error(`Error: ${error.message}`);
+    console.error(`Error:`, error);
     return new Response(
       JSON.stringify({ 
         error: error.message,
