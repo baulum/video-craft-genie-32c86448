@@ -49,18 +49,16 @@ export function LoginForm() {
       
       // For demonstration purposes, let's simulate success
       // In a real app, you would handle the API response here
-      toast({
-        title: "Login successful",
+      toast("Login successful", {
         description: "Redirecting to your dashboard",
       });
       
       // Redirect to dashboard (would be implemented in a real app)
       navigate("/");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Login failed",
+      toast("Login failed", {
         description: "Please check your credentials and try again",
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);

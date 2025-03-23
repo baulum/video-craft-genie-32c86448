@@ -1,9 +1,19 @@
-import { Toast as ShadcnToast, ToastActionElement, ToastProps } from "@/components/ui/toast"
-import { toast as sonnerToast } from "sonner"
+import { type ToastActionElement, type ToastProps } from "@/components/ui/toast"
+import { toast as sonnerToast, Toaster } from "sonner"
 
 const TOAST_LIMIT = 20
 
-export type ToasterToast = Omit<ShadcnToast, "id"> & {
+// Define type for shadcn toast to avoid circular reference
+export type ShadcnToastType = {
+  id: string
+  title?: React.ReactNode
+  description?: React.ReactNode
+  action?: ToastActionElement
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export type ToasterToast = Omit<ShadcnToastType, "id"> & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
@@ -151,18 +161,19 @@ function toast(props: ToastOptions) {
   }
 }
 
+// This is the hook that will be used in components
 function useToast() {
-  // This function now returns an object with a "toasts" property
-  // that contains the current toasts from the memory state.
   return {
+    // Export the sonner toast function for direct use
     toast: sonnerToast,
     // Add convenience methods for common toast types
     success: (message: string, options = {}) => sonnerToast.success(message, options),
     error: (message: string, options = {}) => sonnerToast.error(message, options),
     info: (message: string, options = {}) => sonnerToast.info(message, options),
     warning: (message: string, options = {}) => sonnerToast.warning(message, options),
+    // Keep track of toasts for legacy compatibility
     toasts: memoryState.toasts
   }
 }
 
-export { useToast, toast }
+export { useToast, toast, Toaster }

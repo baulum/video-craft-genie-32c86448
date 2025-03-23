@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -50,15 +49,13 @@ export function ForgotPasswordForm({ onCancel }: ForgotPasswordFormProps) {
       // For demonstration, show success state
       setIsSuccess(true);
       
-      toast({
-        title: "Reset link sent",
+      toast("Reset link sent", {
         description: "Check your email for password reset instructions",
       });
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Failed to send reset link",
+      toast("Failed to send reset link", {
         description: "Please try again later",
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);

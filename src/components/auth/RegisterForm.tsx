@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -63,17 +62,15 @@ export function RegisterForm() {
       console.log("Registration data:", data);
       
       // For demonstration, redirect to verify email page
-      toast({
-        title: "Registration successful",
+      toast("Registration successful", {
         description: "Please check your email to verify your account",
       });
       
       navigate(`/verify-email?email=${encodeURIComponent(data.email)}`);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Registration failed",
+      toast("Registration failed", {
         description: "There was a problem creating your account",
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
