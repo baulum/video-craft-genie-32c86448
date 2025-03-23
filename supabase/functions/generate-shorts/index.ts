@@ -33,6 +33,8 @@ serve(async (req) => {
       )
     }
 
+    console.log(`Processing request for video ID: ${videoId}`)
+
     // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -56,18 +58,24 @@ serve(async (req) => {
       throw new Error(`Video with ID ${videoId} not found`)
     }
 
+    console.log(`Found video: ${video.title}, source: ${video.source}`)
+
     // Update video status to processing
-    await supabaseClient
+    const { error: updateError } = await supabaseClient
       .from('videos')
       .update({ status: 'processing' })
       .eq('id', videoId)
+    
+    if (updateError) {
+      console.error('Error updating video status:', updateError.message)
+      throw new Error(`Failed to update video status: ${updateError.message}`)
+    }
 
     // Start background processing
     const processVideoTask = async () => {
       try {
         console.log(`Starting video processing for ID: ${videoId}`)
         
-        // Simulate transcription and shorts generation
         // In a real implementation, you would:
         // 1. Download the video from Supabase Storage or another source
         // 2. Transcribe using OpenAI Whisper API
@@ -75,33 +83,42 @@ serve(async (req) => {
         // 4. Generate shorts with subtitles
         // 5. Upload shorts back to Supabase Storage
         
-        // Simulate processing time (10 seconds)
-        await new Promise(resolve => setTimeout(resolve, 10000))
+        // Simulate processing time (5 seconds)
+        await new Promise(resolve => setTimeout(resolve, 5000))
         
-        // Simulate creating 3 shorts
-        const shortsData = [
-          {
-            title: `Short 1 from ${video.title}`,
-            duration: "00:45",
-            thumbnail_url: video.thumbnail_url,
-            file_path: `shorts/${videoId}/short_1.mp4`,
-            video_id: videoId
-          },
-          {
-            title: `Short 2 from ${video.title}`,
-            duration: "00:35",
-            thumbnail_url: video.thumbnail_url,
-            file_path: `shorts/${videoId}/short_2.mp4`,
-            video_id: videoId
-          },
-          {
-            title: `Short 3 from ${video.title}`,
-            duration: "00:55",
-            thumbnail_url: video.thumbnail_url,
-            file_path: `shorts/${videoId}/short_3.mp4`,
-            video_id: videoId
-          }
-        ]
+        // Generate meaningful content for shorts based on video type
+        let shortTopics = []
+        
+        if (video.source === 'youtube') {
+          shortTopics = [
+            "Key highlights from the video",
+            "Most interesting points explained",
+            "Main takeaways summarized"
+          ]
+        } else {
+          shortTopics = [
+            "Important moments captured",
+            "Best segments from the video",
+            "Highlights worth sharing"
+          ]
+        }
+        
+        // Create 3 shorts with the generated topics
+        const thumbnailUrl = video.thumbnail_url || 'https://via.placeholder.com/640x360?text=Video+Short'
+        
+        // Determine durations (realistic for short videos)
+        const durations = ["00:45", "00:52", "00:38"]
+        
+        const shortsData = shortTopics.map((topic, index) => ({
+          title: `${topic} - ${video.title.substring(0, 30)}${video.title.length > 30 ? '...' : ''}`,
+          duration: durations[index],
+          thumbnail_url: thumbnailUrl,
+          file_path: `shorts/${videoId}/short_${index + 1}.mp4`,
+          video_id: videoId,
+          views: 0
+        }))
+        
+        console.log(`Creating ${shortsData.length} shorts for video ID: ${videoId}`)
         
         // Insert shorts into database
         for (const shortData of shortsData) {
@@ -111,15 +128,21 @@ serve(async (req) => {
             
           if (insertError) {
             console.error(`Error inserting short: ${insertError.message}`)
+            throw new Error(`Failed to insert short: ${insertError.message}`)
           }
         }
         
         // Update video status to complete
-        await supabaseClient
+        const { error: completeError } = await supabaseClient
           .from('videos')
           .update({ status: 'complete' })
           .eq('id', videoId)
           
+        if (completeError) {
+          console.error(`Error updating video status to complete: ${completeError.message}`)
+          throw new Error(`Failed to update video status to complete: ${completeError.message}`)
+        }
+        
         console.log(`Video processing complete for ID: ${videoId}`)
       } catch (error) {
         console.error(`Error in processing task: ${error.message}`)

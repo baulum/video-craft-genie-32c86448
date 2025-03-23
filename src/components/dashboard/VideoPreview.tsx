@@ -1,10 +1,11 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Scissors, RefreshCw, Download } from "lucide-react";
-import { useState } from "react";
+import { Scissors, RefreshCw, Download, Check, Clock, AlertCircle } from "lucide-react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface VideoPreviewProps {
   video: {
@@ -19,6 +20,51 @@ interface VideoPreviewProps {
 
 export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPreviewProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Check processing status periodically if processing
+  useEffect(() => {
+    if (!video.id || processingStatus !== "processing") return;
+
+    const checkStatus = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('videos')
+          .select('status')
+          .eq('id', video.id)
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          if (data.status === 'complete') {
+            setProcessingStatus("success");
+            setIsProcessing(false);
+            toast({
+              title: "Processing Complete",
+              description: "Your shorts have been generated successfully!",
+              variant: "default",
+            });
+          } else if (data.status === 'error') {
+            setProcessingStatus("error");
+            setIsProcessing(false);
+            setErrorMessage("An error occurred during processing. Please try again.");
+            toast({
+              title: "Processing Failed",
+              description: "There was an error generating your shorts.",
+              variant: "destructive",
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error checking status:", error);
+      }
+    };
+
+    const interval = setInterval(checkStatus, 3000);
+    return () => clearInterval(interval);
+  }, [video.id, processingStatus]);
 
   const handleGenerateShorts = async () => {
     if (!video.id) {
@@ -31,6 +77,8 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
     }
 
     setIsProcessing(true);
+    setProcessingStatus("processing");
+    setErrorMessage(null);
     
     try {
       const { data, error } = await supabase.functions.invoke('generate-shorts', {
@@ -50,13 +98,48 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
       onStartProcessing();
     } catch (error) {
       console.error('Error generating shorts:', error);
+      setProcessingStatus("error");
+      setIsProcessing(false);
+      setErrorMessage(error instanceof Error ? error.message : "Failed to start shorts generation.");
       toast({
         title: "Processing Failed",
         description: error instanceof Error ? error.message : "Failed to start shorts generation.",
         variant: "destructive",
       });
-    } finally {
-      setIsProcessing(false);
+    }
+  };
+
+  const getProcessingStatusUI = () => {
+    switch (processingStatus) {
+      case "processing":
+        return (
+          <div className="flex items-center space-x-2 text-amber-500">
+            <Clock className="h-4 w-4 animate-pulse" />
+            <span>Processing your video...</span>
+          </div>
+        );
+      case "success":
+        return (
+          <div className="flex items-center space-x-2 text-green-500">
+            <Check className="h-4 w-4" />
+            <span>Shorts generated successfully!</span>
+          </div>
+        );
+      case "error":
+        return (
+          <Alert variant="destructive" className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {errorMessage || "Failed to generate shorts. Please try again."}
+            </AlertDescription>
+          </Alert>
+        );
+      default:
+        return (
+          <div className="text-sm text-gray-500">
+            Ready to create shorts from this video
+          </div>
+        );
     }
   };
 
@@ -66,7 +149,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>{video.title}</span>
-            <Button variant="outline" size="sm" onClick={onNewUpload}>
+            <Button variant="outline" size="sm" onClick={onNewUpload} disabled={isProcessing}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Upload Another Video
             </Button>
@@ -81,7 +164,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           <div className="aspect-video w-full bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden">
             {video.source === "youtube" ? (
               <iframe
-                src={video.url}
+                src={video.url.replace('watch?v=', 'embed/')}
                 title={video.title}
                 className="w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -96,12 +179,14 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           </div>
         </CardContent>
         <CardFooter className="flex justify-between">
-          <div className="text-sm text-gray-500">
-            Ready to create shorts from this video
-          </div>
-          <Button onClick={handleGenerateShorts} disabled={isProcessing}>
+          {getProcessingStatusUI()}
+          <Button 
+            onClick={handleGenerateShorts} 
+            disabled={isProcessing || processingStatus === "success"}
+            className={processingStatus === "success" ? "bg-green-500 hover:bg-green-600" : ""}
+          >
             <Scissors className="h-4 w-4 mr-2" />
-            {isProcessing ? "Processing..." : "Generate Shorts"}
+            {isProcessing ? "Processing..." : processingStatus === "success" ? "Shorts Generated" : "Generate Shorts"}
           </Button>
         </CardFooter>
       </Card>
