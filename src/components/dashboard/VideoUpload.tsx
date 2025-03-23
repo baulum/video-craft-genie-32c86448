@@ -6,8 +6,12 @@ import { Progress } from "@/components/ui/progress";
 import { Upload, Link as LinkIcon, Youtube, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { VideoPreview } from "@/components/dashboard/VideoPreview";
+import { supabase } from "@/integrations/supabase/client";
+import { VideoInsert } from "@/types/supabase";
+import { useNavigate } from "react-router-dom";
 
 export const VideoUpload = () => {
+  const navigate = useNavigate();
   const [uploadMethod, setUploadMethod] = useState<"file" | "url" | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -19,60 +23,132 @@ export const VideoUpload = () => {
   } | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    simulateUpload(file.name, "file");
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadStatus("uploading");
+
+    try {
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          const newProgress = prev + 5;
+          if (newProgress >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return newProgress;
+        });
+      }, 300);
+
+      // Create a record in the videos table
+      const { data: videoData, error: videoError } = await supabase
+        .from('videos')
+        .insert({
+          title: file.name,
+          url: URL.createObjectURL(file), // Temporary URL for preview
+          source: 'file',
+          status: 'pending',
+        } as VideoInsert)
+        .select()
+        .single();
+
+      if (videoError) throw videoError;
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      setIsUploading(false);
+      setUploadStatus("success");
+      
+      // Set uploaded video for preview
+      setUploadedVideo({
+        url: URL.createObjectURL(file),
+        title: file.name,
+        source: "file"
+      });
+      
+      toast.success("Upload completed successfully!");
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadStatus("error");
+      setIsUploading(false);
+      toast.error("Upload failed. Please try again.");
+    }
   };
 
-  const handleYoutubeUpload = () => {
+  const handleYoutubeUpload = async () => {
     if (!youtubeUrl.trim()) {
       toast.error("Please enter a valid YouTube URL");
       return;
     }
 
-    simulateUpload(youtubeUrl, "youtube");
-  };
-
-  // Simulate file upload with progress
-  const simulateUpload = (fileName: string, source: "file" | "youtube") => {
     setIsUploading(true);
     setUploadProgress(0);
     setUploadStatus("uploading");
 
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        const newProgress = prev + 10;
-        if (newProgress >= 100) {
+    try {
+      // Create video record in database
+      const { data: videoData, error: videoError } = await supabase
+        .from('videos')
+        .insert({
+          title: `YouTube Video: ${youtubeUrl}`,
+          url: youtubeUrl,
+          source: 'youtube',
+          status: 'pending',
+        } as VideoInsert)
+        .select()
+        .single();
+
+      if (videoError) throw videoError;
+
+      // Call the Edge Function to start YouTube download
+      const { data, error } = await supabase.functions.invoke('download-youtube', {
+        body: { 
+          videoId: videoData.id,
+          youtubeUrl: youtubeUrl 
+        }
+      });
+      
+      if (error) throw error;
+
+      // Simulate progress for UX
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        setUploadProgress(progress);
+        
+        if (progress >= 100) {
           clearInterval(interval);
           setIsUploading(false);
           setUploadStatus("success");
           
-          // Create a demo video object
+          // Create a demo video object for preview
           setUploadedVideo({
-            url: source === "file" 
-              ? URL.createObjectURL(new Blob()) // This would be replaced with the actual blob URL in a real app
-              : "https://www.youtube.com/embed/" + youtubeUrl.split("v=")[1]?.split("&")[0],
-            title: source === "file" 
-              ? fileName 
-              : "YouTube Video: " + youtubeUrl,
-            source
+            url: youtubeUrl,
+            title: videoData.title || `YouTube Video: ${youtubeUrl}`,
+            source: "youtube"
           });
           
-          toast.success("Upload completed successfully!");
-          return 100;
+          toast.success("YouTube video added successfully!");
         }
-        return newProgress;
-      });
-    }, 500);
+      }, 500);
+    } catch (error) {
+      console.error('YouTube import error:', error);
+      setUploadStatus("error");
+      setIsUploading(false);
+      toast.error("Failed to import YouTube video. Please try again.");
+    }
   };
 
-  const handleStartProcessing = () => {
+  const handleStartProcessing = async () => {
     if (!uploadedVideo) return;
     
     toast.success("Video processing started. You'll be notified when shorts are ready.");
-    // In a real app, this would trigger the backend processing
+    // In a real app, this would call a function to process the video
+    navigate('/dashboard');
   };
 
   // Reset the upload state to start a new upload
