@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Short } from "@/types/supabase";
@@ -77,24 +76,19 @@ export const ShortsGallery = () => {
       
       console.log(`Attempting to download file: ${filePath}`);
       
-      // Create a signed URL for downloading
-      const { data, error } = await supabase.storage
+      // Get the public URL directly - simpler approach for public buckets
+      const { data } = supabase
+        .storage
         .from('shorts')
-        .createSignedUrl(filePath, 60); // URL valid for 60 seconds
+        .getPublicUrl(filePath);
       
-      if (error) {
-        console.error('Error creating signed URL:', error);
-        throw error;
+      if (!data?.publicUrl) {
+        throw new Error('Could not generate public URL');
       }
       
-      if (!data?.signedUrl) {
-        throw new Error('No signed URL returned');
-      }
-      
-      // Create a download link and trigger the download
-      const downloadUrl = data.signedUrl;
+      // Create a temporary anchor element and trigger the download
       const a = document.createElement('a');
-      a.href = downloadUrl;
+      a.href = data.publicUrl;
       a.download = filePath.split('/').pop() || 'short-video.mp4';
       document.body.appendChild(a);
       a.click();

@@ -11,6 +11,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Sample MP4 header bytes (very simplified)
+// This creates a minimal MP4 file that's recognized as a video file by browsers
+// It won't play actual content, but will be recognized as a valid MP4 container
+const SAMPLE_MP4_HEADER = new Uint8Array([
+  0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x6D, 0x70, 0x34, 0x32, 
+  0x00, 0x00, 0x00, 0x00, 0x6D, 0x70, 0x34, 0x32, 0x69, 0x73, 0x6F, 0x6D, 
+  0x00, 0x00, 0x00, 0x08, 0x6D, 0x6F, 0x6F, 0x76, 0x00, 0x00, 0x00, 0x08, 
+  0x6D, 0x64, 0x61, 0x74
+]);
+
+// Generate a fake MP4 video file with a specified duration (in KB)
+function generateFakeMp4VideoData(sizeInKB = 500) {
+  // Create a buffer for the fake MP4 data
+  // Header + random data to simulate video frames
+  const dataSize = sizeInKB * 1024;
+  const videoData = new Uint8Array(dataSize);
+  
+  // Copy the MP4 header
+  videoData.set(SAMPLE_MP4_HEADER);
+  
+  // Fill the rest with pseudo-random data to simulate video frames
+  for (let i = SAMPLE_MP4_HEADER.length; i < dataSize; i++) {
+    videoData[i] = Math.floor(Math.random() * 256);
+  }
+  
+  return videoData;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -143,20 +171,19 @@ serve(async (req) => {
           // Continue execution as the bucket might exist despite the error
         }
         
-        // Generate placeholder video content (in a real app, this would be actual video content)
+        // Generate placeholder video content with realistic sizes
         for (let i = 0; i < shortTopics.length; i++) {
           const shortTitle = `${shortTopics[i]} - ${video.title.substring(0, 30)}${video.title.length > 30 ? '...' : ''}`
-          // IMPORTANT: Don't include 'shorts/' in the file path - the bucket name is already 'shorts'
           const filePath = `${videoId}/short_${i + 1}.mp4`
           
-          // Create a simple buffer with text data to simulate a video file
-          // In a real app, this would be actual video data
-          const encoder = new TextEncoder()
-          const videoData = encoder.encode(`This is a placeholder for the actual video content of "${shortTitle}"`)
+          // Create a realistic-sized fake MP4 video
+          // Size varies by duration - longer videos are larger
+          const sizeInKB = 500 + (i * 200); // 500KB, 700KB, 900KB
+          const videoData = generateFakeMp4VideoData(sizeInKB);
           
-          console.log(`Uploading short video to: ${filePath}`)
+          console.log(`Uploading short video to: ${filePath} (size: ${sizeInKB}KB)`)
           
-          // Upload the placeholder video to storage
+          // Upload the video data to storage
           const { error: uploadError } = await supabaseClient.storage
             .from('shorts')
             .upload(filePath, videoData, {
@@ -176,7 +203,7 @@ serve(async (req) => {
             title: shortTitle,
             duration: durations[i],
             thumbnail_url: thumbnailUrl,
-            file_path: filePath,  // Store the correct path without bucket name prefix
+            file_path: filePath,
             video_id: videoId,
             views: 0
           })
