@@ -26,14 +26,35 @@ export async function ensureStorageBuckets(supabaseClient: any) {
         throw createBucketError;
       }
       
-      // Add a permissive policy to allow access to the shorts bucket
+      // Add a permissive policy to allow public access to the shorts bucket
       const { error: policyError } = await supabaseClient.query(`
-        INSERT INTO storage.policies (name, bucket_id, definition)
-        VALUES (
-          'Public Access',
-          'shorts',
-          '{ "mimetype": "*" }'
-        );
+        BEGIN;
+        -- Drop existing policies if they exist
+        DROP POLICY IF EXISTS "Public Access" ON storage.objects FOR SELECT;
+        
+        -- Create new policy for public access
+        CREATE POLICY "Public Access" 
+        ON storage.objects FOR SELECT 
+        USING (bucket_id = 'shorts');
+        
+        -- Allow authenticated users to insert objects
+        DROP POLICY IF EXISTS "Insert Access" ON storage.objects FOR INSERT;
+        CREATE POLICY "Insert Access" 
+        ON storage.objects FOR INSERT 
+        WITH CHECK (bucket_id = 'shorts');
+        
+        -- Allow authenticated users to update their own objects
+        DROP POLICY IF EXISTS "Update Access" ON storage.objects FOR UPDATE;
+        CREATE POLICY "Update Access" 
+        ON storage.objects FOR UPDATE 
+        USING (bucket_id = 'shorts');
+        
+        -- Allow authenticated users to delete their own objects
+        DROP POLICY IF EXISTS "Delete Access" ON storage.objects FOR DELETE;
+        CREATE POLICY "Delete Access" 
+        ON storage.objects FOR DELETE 
+        USING (bucket_id = 'shorts');
+        COMMIT;
       `);
       
       if (policyError) {
@@ -75,6 +96,8 @@ export async function uploadToStorage(
   contentType: string
 ) {
   try {
+    console.log(`Uploading to ${bucket}/${filePath} with content type ${contentType}`);
+    
     const { data, error } = await supabaseClient.storage
       .from(bucket)
       .upload(filePath, fileBuffer, {
@@ -88,10 +111,14 @@ export async function uploadToStorage(
       throw error;
     }
     
+    console.log(`Successfully uploaded file to ${bucket}/${filePath}`);
+    
     // Get public URL
     const { data: urlData } = supabaseClient.storage
       .from(bucket)
       .getPublicUrl(filePath);
+    
+    console.log(`Generated public URL: ${urlData.publicUrl}`);
     
     return { 
       success: true, 

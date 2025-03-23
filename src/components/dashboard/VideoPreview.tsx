@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scissors, RefreshCw, Check, Clock, AlertCircle, Video } from "lucide-react";
@@ -72,10 +71,36 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
     return () => clearInterval(interval);
   }, [video.id, processingStatus]);
 
+  useEffect(() => {
+    if (!video.id) return;
+    
+    const channel = supabase
+      .channel(`shorts-${video.id}`)
+      .on('postgres_changes', 
+        {
+          event: '*',
+          schema: 'public',
+          table: 'shorts',
+          filter: `video_id=eq.${video.id}`
+        }, 
+        (payload) => {
+          console.log("Shorts for this video changed:", payload);
+          fetchGeneratedShorts();
+        }
+      )
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [video.id]);
+
   const fetchGeneratedShorts = async () => {
     if (!video.id) return;
     
     try {
+      console.log(`Fetching shorts for video ID: ${video.id}`);
+      
       const { data, error } = await supabase
         .from('shorts')
         .select('*')
@@ -85,7 +110,23 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
       if (error) throw error;
       
       console.log("Retrieved generated shorts:", data);
-      setGeneratedShorts(data || []);
+      
+      const processedShorts = await Promise.all((data || []).map(async (short) => {
+        if (!short.url && short.file_path) {
+          try {
+            const { data: publicUrlData } = supabase.storage
+              .from('shorts')
+              .getPublicUrl(short.file_path);
+            
+            short.url = publicUrlData.publicUrl;
+          } catch (err) {
+            console.error("Error generating URL for short:", err);
+          }
+        }
+        return short;
+      }));
+      
+      setGeneratedShorts(processedShorts || []);
     } catch (error) {
       console.error("Error fetching generated shorts:", error);
       showToast.error(
@@ -94,6 +135,12 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
       );
     }
   };
+
+  useEffect(() => {
+    if (video.id) {
+      fetchGeneratedShorts();
+    }
+  }, [video.id]);
 
   const handleGenerateShorts = async () => {
     if (!video.id) {
@@ -257,14 +304,27 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
             {isProcessing ? "Processing..." : processingStatus === "success" ? "Shorts Generated" : "Generate Shorts"}
           </Button>
           
-          {processingStatus === "success" && generatedShorts.length > 0 && (
+          {(processingStatus === "success" || generatedShorts.length > 0) && (
             <div className="mt-4 w-full">
-              <p className="text-sm font-medium mb-2">Generated Shorts:</p>
+              <p className="text-sm font-medium mb-2">Generated Shorts ({generatedShorts.length}):</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {generatedShorts.map(short => (
-                  <ShortPreviewCard key={short.id} short={short} />
-                ))}
+                {generatedShorts.length > 0 ? (
+                  generatedShorts.map(short => (
+                    <ShortPreviewCard key={short.id} short={short} />
+                  ))
+                ) : (
+                  <p className="text-gray-500 col-span-full text-center">No shorts found for this video.</p>
+                )}
               </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={fetchGeneratedShorts} 
+                className="mt-2 w-full"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Shorts
+              </Button>
             </div>
           )}
         </CardFooter>
