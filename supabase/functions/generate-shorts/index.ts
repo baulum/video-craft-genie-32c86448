@@ -12,6 +12,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Local fallback placeholder image using base64 - a simple gray rectangle with text
+const fallbackImageBase64 = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjM2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjY2NjY2NjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMjQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGFsaWdubWVudC1iYXNlbGluZT0ibWlkZGxlIiBmaWxsPSIjMzMzMzMzIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=";
+
 // Function to analyze video content using Gemini AI
 async function analyzeVideoContent(videoInfo, model) {
   try {
@@ -290,8 +293,8 @@ serve(async (req) => {
           // Continue execution as the bucket might exist despite the error
         }
         
-        // Create thumbnail URL (would be extracted from the video in a real implementation)
-        const thumbnailUrl = video.thumbnail_url || 'https://via.placeholder.com/640x360?text=Video+Short';
+        // Create thumbnail URL - use a base64 fallback image instead of external placeholder
+        const thumbnailUrl = video.thumbnail_url || fallbackImageBase64;
         
         // Process each segment and create shorts
         const shortsData = [];

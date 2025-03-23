@@ -15,6 +15,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+// Local fallback placeholder image using base64 - a simple gray rectangle with text
+const fallbackImageBase64 = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjM2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjY2NjY2NjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMjQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGFsaWdubWVudC1iYXNlbGluZT0ibWlkZGxlIiBmaWxsPSIjMzMzMzMzIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=";
+const errorImageBase64 = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjM2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmZjY2NjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMjQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGFsaWdubWVudC1iYXNlbGluZT0ibWlkZGxlIiBmaWxsPSIjOTkzMzMzIj5FcnJvciBMb2FkaW5nIEltYWdlPC90ZXh0Pjwvc3ZnPg==";
+
 export const VideoList = () => {
   const [videos, setVideos] = useState<VideoWithThumbnail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +36,7 @@ export const VideoList = () => {
         // Ensure valid thumbnail URLs
         const videosWithValidThumbnails = data?.map(video => ({
           ...video,
-          thumbnail_url: video.thumbnail_url || 'https://via.placeholder.com/640x360?text=No+Thumbnail'
+          thumbnail_url: video.thumbnail_url || fallbackImageBase64
         })) || [];
         
         setVideos(videosWithValidThumbnails);
@@ -63,12 +67,12 @@ export const VideoList = () => {
           <Card key={video.id} className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden relative">
             <div className="w-full h-48 relative">
               <img 
-                src={video.thumbnail_url || 'https://via.placeholder.com/640x360?text=No+Thumbnail'} 
+                src={video.thumbnail_url || fallbackImageBase64} 
                 alt={video.title} 
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = 'https://via.placeholder.com/640x360?text=Error+Loading+Image';
+                  target.src = errorImageBase64;
                 }}
               />
               {video.status === 'processing' && (
