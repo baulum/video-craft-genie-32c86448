@@ -71,17 +71,30 @@ export const ShortsGallery = () => {
     try {
       setDownloading(shortId);
       
-      // In a real app, you would download from Supabase Storage
-      // const { data, error } = await supabase.storage.from('shorts').download(filePath);
+      // In a real app with Supabase Storage set up, we would use:
+      const { data, error } = await supabase.storage
+        .from('shorts')
+        .download(filePath);
       
-      // Simulate download
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      if (error) throw error;
       
-      toast({
-        title: "Download Complete",
-        description: "Your short video has been downloaded successfully!",
-        variant: "default",
-      });
+      // Create a download link and trigger the download
+      if (data) {
+        const url = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filePath.split('/').pop() || 'short-video.mp4';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        toast({
+          title: "Download Complete",
+          description: "Your short video has been downloaded successfully!",
+          variant: "default",
+        });
+      }
     } catch (error) {
       console.error('Error downloading short:', error);
       toast({
@@ -180,7 +193,7 @@ export const ShortsGallery = () => {
             <Card key={short.id} className="overflow-hidden group">
               <div className="relative aspect-[9/16] bg-gray-100 dark:bg-gray-800">
                 <img 
-                  src={short.thumbnail_url || "https://via.placeholder.com/640x360?text=Video+Short"}
+                  src={short.videos?.thumbnail_url || short.thumbnail_url || "https://via.placeholder.com/640x360?text=Video+Short"}
                   alt={short.title}
                   className="w-full h-full object-cover"
                 />
