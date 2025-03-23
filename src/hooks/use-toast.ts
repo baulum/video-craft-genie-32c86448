@@ -1,5 +1,5 @@
 
-import { toast as sonnerToast, type Toast } from "sonner";
+import { toast as sonnerToast, type ToastT } from "sonner";
 
 // We need to modify our toast API to match Sonner's expectations
 const useToast = () => {
