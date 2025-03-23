@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +17,7 @@ export const VideoUpload = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [uploadedVideo, setUploadedVideo] = useState<{
+    id?: string;
     url: string;
     title: string;
     source: "file" | "youtube";
@@ -35,7 +35,6 @@ export const VideoUpload = () => {
     setErrorMessage(null);
 
     try {
-      // Simulate upload progress
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
           const newProgress = prev + 5;
@@ -47,12 +46,11 @@ export const VideoUpload = () => {
         });
       }, 300);
 
-      // Create a record in the videos table
       const { data: videoData, error: videoError } = await supabase
         .from('videos')
         .insert({
           title: file.name,
-          url: URL.createObjectURL(file), // Temporary URL for preview
+          url: URL.createObjectURL(file),
           source: 'file',
           status: 'pending',
         } as VideoInsert)
@@ -66,8 +64,8 @@ export const VideoUpload = () => {
       setIsUploading(false);
       setUploadStatus("success");
       
-      // Set uploaded video for preview
       setUploadedVideo({
+        id: videoData.id,
         url: URL.createObjectURL(file),
         title: file.name,
         source: "file"
@@ -107,7 +105,6 @@ export const VideoUpload = () => {
     setErrorMessage(null);
 
     try {
-      // Create video record in database
       const { data: videoData, error: videoError } = await supabase
         .from('videos')
         .insert({
@@ -127,10 +124,8 @@ export const VideoUpload = () => {
         throw new Error("Failed to create video record");
       }
 
-      // Set initial progress
       setUploadProgress(30);
 
-      // Call the Edge Function to start YouTube download
       const { data, error } = await supabase.functions.invoke('download-youtube', {
         body: { 
           videoId: videoData.id,
@@ -142,17 +137,15 @@ export const VideoUpload = () => {
         throw new Error(`Function error: ${error.message}`);
       }
 
-      // Update progress based on response
       setUploadProgress(70);
 
-      // Simulate final progress steps for better UX
       setTimeout(() => {
         setUploadProgress(100);
         setIsUploading(false);
         setUploadStatus("success");
         
-        // Create a demo video object for preview
         setUploadedVideo({
+          id: videoData.id,
           url: youtubeUrl,
           title: videoData.title || `YouTube Video: ${youtubeUrl}`,
           source: "youtube"
@@ -185,11 +178,9 @@ export const VideoUpload = () => {
       description: "Video processing started. You'll be notified when shorts are ready.",
       variant: "default",
     });
-    // In a real app, this would call a function to process the video
     navigate('/dashboard');
   };
 
-  // Reset the upload state to start a new upload
   const handleNewUpload = () => {
     setUploadStatus("idle");
     setUploadedVideo(null);
@@ -198,7 +189,6 @@ export const VideoUpload = () => {
     setErrorMessage(null);
   };
 
-  // Show video preview if upload is successful
   if (uploadStatus === "success" && uploadedVideo) {
     return (
       <VideoPreview 

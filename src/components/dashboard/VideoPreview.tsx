@@ -2,9 +2,13 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scissors, RefreshCw, Download } from "lucide-react";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface VideoPreviewProps {
   video: {
+    id?: string;
     url: string;
     title: string;
     source: "file" | "youtube";
@@ -14,6 +18,48 @@ interface VideoPreviewProps {
 }
 
 export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPreviewProps) => {
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleGenerateShorts = async () => {
+    if (!video.id) {
+      toast({
+        title: "Error",
+        description: "Video ID is missing. Please upload the video again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-shorts', {
+        body: { videoId: video.id }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Processing Started",
+        description: "Your video is being analyzed and shorts are being generated.",
+        variant: "default",
+      });
+      
+      onStartProcessing();
+    } catch (error) {
+      console.error('Error generating shorts:', error);
+      toast({
+        title: "Processing Failed",
+        description: error instanceof Error ? error.message : "Failed to start shorts generation.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -53,9 +99,9 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           <div className="text-sm text-gray-500">
             Ready to create shorts from this video
           </div>
-          <Button onClick={onStartProcessing}>
+          <Button onClick={handleGenerateShorts} disabled={isProcessing}>
             <Scissors className="h-4 w-4 mr-2" />
-            Generate Shorts
+            {isProcessing ? "Processing..." : "Generate Shorts"}
           </Button>
         </CardFooter>
       </Card>
