@@ -19,33 +19,36 @@ export const VideoStats = () => {
         setLoading(true);
         
         // Get total videos count
-        const { data: videos, error: videosError } = await supabase
+        const { count: totalVideos, error: videosError } = await supabase
           .from('videos')
-          .select('id, status', { count: 'exact' });
+          .select('*', { count: 'exact', head: true });
         
         if (videosError) throw videosError;
         
         // Get total shorts count
-        const { data: shorts, error: shortsError } = await supabase
+        const { count: totalShorts, error: shortsError } = await supabase
           .from('shorts')
-          .select('id', { count: 'exact' });
+          .select('*', { count: 'exact', head: true });
           
         if (shortsError) throw shortsError;
         
-        // Calculate processing videos
-        const processingVideos = videos?.filter(v => v.status === 'processing').length || 0;
+        // Get processing videos count
+        const { count: processingCount, error: processingError } = await supabase
+          .from('videos')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'processing');
+        
+        if (processingError) throw processingError;
         
         // Calculate conversion rate (shorts per video)
-        const totalVideosCount = videos?.length || 0;
-        const totalShortsCount = shorts?.length || 0;
-        const conversionRate = totalVideosCount > 0 
-          ? Math.round((totalShortsCount / totalVideosCount) * 100) 
+        const conversionRate = totalVideos > 0 
+          ? Math.round((totalShorts / totalVideos) * 100) 
           : 0;
         
         setStats({
-          totalVideos: totalVideosCount,
-          shortsGenerated: totalShortsCount,
-          processing: processingVideos,
+          totalVideos: totalVideos || 0,
+          shortsGenerated: totalShorts || 0,
+          processing: processingCount || 0,
           conversionRate: conversionRate
         });
       } catch (error) {
@@ -56,6 +59,34 @@ export const VideoStats = () => {
     }
 
     fetchStats();
+    
+    // Set up subscription for real-time updates
+    const videosChannel = supabase
+      .channel('public:videos')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'videos' 
+      }, () => {
+        fetchStats();
+      })
+      .subscribe();
+      
+    const shortsChannel = supabase
+      .channel('public:shorts-stats')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'shorts' 
+      }, () => {
+        fetchStats();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(videosChannel);
+      supabase.removeChannel(shortsChannel);
+    };
   }, []);
 
   return (
