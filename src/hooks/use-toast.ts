@@ -1,8 +1,9 @@
-import { Toast, ToastActionElement, ToastProps } from "@/components/ui/toast"
-import { useToast as useSonnerToast } from "sonner"
+import { Toast as ShadcnToast, ToastActionElement, ToastProps } from "@/components/ui/toast"
+import { toast as sonnerToast } from "sonner"
 
 const TOAST_LIMIT = 20
-export type ToasterToast = Omit<Toast, "id"> & {
+
+export type ToasterToast = Omit<ShadcnToast, "id"> & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
@@ -119,9 +120,9 @@ function dispatch(action: Action) {
   })
 }
 
-type Toast = Omit<ToasterToast, "id">
+export type ToastOptions = Omit<ToasterToast, "id">
 
-function toast({ ...props }: Toast) {
+function toast(props: ToastOptions) {
   const id = generateId()
 
   const update = (props: ToasterToast) =>
@@ -151,18 +152,17 @@ function toast({ ...props }: Toast) {
 }
 
 function useToast() {
-  const sonnerToast = useSonnerToast()
-  
-  const customToast = {
-    ...sonnerToast,
-    
-    // Add more toast variants
-    error: (message: string, options = {}) => {
-      sonnerToast.error(message, options)
-    }
+  // This function now returns an object with a "toasts" property
+  // that contains the current toasts from the memory state.
+  return {
+    toast: sonnerToast,
+    // Add convenience methods for common toast types
+    success: (message: string, options = {}) => sonnerToast.success(message, options),
+    error: (message: string, options = {}) => sonnerToast.error(message, options),
+    info: (message: string, options = {}) => sonnerToast.info(message, options),
+    warning: (message: string, options = {}) => sonnerToast.warning(message, options),
+    toasts: memoryState.toasts
   }
-  
-  return customToast
 }
 
 export { useToast, toast }
