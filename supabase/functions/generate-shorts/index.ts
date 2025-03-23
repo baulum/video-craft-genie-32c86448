@@ -210,9 +210,13 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Initialize Gemini AI
+    // Initialize Gemini AI - Updated to use the correct model
     const genAI = new GoogleGenerativeAI(Deno.env.get('GEMINI_API_KEY') || "");
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    // Update the model name to "gemini-1.5-flash" which is the latest recommended model
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // Log Gemini AI configuration
+    console.log("Initializing Gemini AI with model: gemini-1.5-flash");
 
     // Get video details
     const { data: video, error: videoError } = await supabaseClient
