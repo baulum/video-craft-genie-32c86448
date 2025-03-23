@@ -1,11 +1,12 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Scissors, RefreshCw, Check, Clock, AlertCircle } from "lucide-react";
+import { Scissors, RefreshCw, Check, Clock, AlertCircle, Video } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { showToast } from "@/utils/toast-helper";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 
 interface VideoPreviewProps {
   video: {
@@ -22,6 +23,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [processingProgress, setProcessingProgress] = useState(0);
 
   // Check processing status periodically if processing
   useEffect(() => {
@@ -41,6 +43,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           if (data.status === 'complete') {
             setProcessingStatus("success");
             setIsProcessing(false);
+            setProcessingProgress(100);
             showToast.success(
               "Processing Complete",
               "Your shorts have been generated successfully!"
@@ -53,6 +56,9 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
               "Processing Failed",
               data.error_message || "There was an error generating your shorts."
             );
+          } else if (data.status === 'processing') {
+            // Increment progress simulation
+            setProcessingProgress(prev => Math.min(prev + 5, 90));
           }
         }
       } catch (error) {
@@ -76,6 +82,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
     setIsProcessing(true);
     setProcessingStatus("processing");
     setErrorMessage(null);
+    setProcessingProgress(10); // Start with some progress
     
     try {
       const { data, error } = await supabase.functions.invoke('generate-shorts', {
@@ -86,9 +93,11 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
         throw error;
       }
 
+      setProcessingProgress(30); // Jump progress after successful invocation
+      
       showToast.success(
         "Processing Started",
-        "Your video is being analyzed and shorts are being generated."
+        "Your video is being analyzed and shorts are being generated. This may take a few minutes."
       );
       
       onStartProcessing();
@@ -96,6 +105,7 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
       console.error('Error generating shorts:', error);
       setProcessingStatus("error");
       setIsProcessing(false);
+      setProcessingProgress(0);
       setErrorMessage(error instanceof Error ? error.message : "Failed to start shorts generation.");
       showToast.error(
         "Processing Failed",
@@ -108,9 +118,18 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
     switch (processingStatus) {
       case "processing":
         return (
-          <div className="flex items-center space-x-2 text-amber-500">
-            <Clock className="h-4 w-4 animate-pulse" />
-            <span>Processing your video...</span>
+          <div className="w-full space-y-2">
+            <div className="flex items-center justify-between text-amber-500">
+              <div className="flex items-center space-x-2">
+                <Clock className="h-4 w-4 animate-pulse" />
+                <span>Processing your video...</span>
+              </div>
+              <span>{processingProgress}%</span>
+            </div>
+            <Progress value={processingProgress} className="h-2" />
+            <p className="text-xs text-gray-500">
+              This process may take several minutes depending on the video length
+            </p>
           </div>
         );
       case "success":
@@ -138,6 +157,51 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
     }
   };
 
+  const renderVideoPreview = () => {
+    if (video.source === "youtube") {
+      // For YouTube videos, embed the YouTube player
+      const youtubeId = getYoutubeVideoId(video.url);
+      if (youtubeId) {
+        return (
+          <iframe
+            src={`https://www.youtube.com/embed/${youtubeId}`}
+            title={video.title}
+            className="w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          ></iframe>
+        );
+      }
+    }
+    
+    // For file uploads or fallback
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-500 bg-gray-100 dark:bg-gray-800">
+        <Video className="h-16 w-16 mb-2 text-gray-400" />
+        <p className="text-center max-w-xs">{video.title}</p>
+      </div>
+    );
+  };
+  
+  // Extract YouTube video ID from various URL formats
+  function getYoutubeVideoId(url: string): string | null {
+    if (!url) return null;
+    
+    const regexes = [
+      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i,
+      /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/
+    ];
+    
+    for (const regex of regexes) {
+      const match = url.match(regex);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    
+    return null;
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -157,28 +221,15 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
         </CardHeader>
         <CardContent>
           <div className="aspect-video w-full bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden">
-            {video.source === "youtube" ? (
-              <iframe
-                src={video.url.replace('watch?v=', 'embed/')}
-                title={video.title}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-500 bg-gray-200 dark:bg-gray-700">
-                <p>Video preview would be shown here</p>
-                {/* In a real app, this would be a video player */}
-              </div>
-            )}
+            {renderVideoPreview()}
           </div>
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row gap-4">
+        <CardFooter className="flex flex-col space-y-4">
           {getProcessingStatusUI()}
           <Button 
             onClick={handleGenerateShorts} 
             disabled={isProcessing || processingStatus === "success"}
-            className={`sm:ml-auto ${processingStatus === "success" ? "bg-green-500 hover:bg-green-600" : ""}`}
+            className={`w-full ${processingStatus === "success" ? "bg-green-500 hover:bg-green-600" : ""}`}
           >
             <Scissors className="h-4 w-4 mr-2" />
             {isProcessing ? "Processing..." : processingStatus === "success" ? "Shorts Generated" : "Generate Shorts"}
