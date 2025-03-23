@@ -132,45 +132,43 @@ function dispatch(action: Action) {
   })
 }
 
-// Extend the sonner toast type to include our variant
-type ExtendedToastOptions = Parameters<typeof sonnerToast>[1] & {
-  variant?: "default" | "destructive" | null
+// Helper type for toast function
+type ToastParams = {
+  title: string;
+  description?: string;
+  variant?: "default" | "destructive";
+} | string;
+
+// Main toast function that handles both string and object inputs
+function toast(params: ToastParams, options?: any) {
+  if (typeof params === 'string') {
+    return sonnerToast(params, options);
+  }
+  
+  // Handle object format
+  const { title, description, variant } = params as { 
+    title: string; 
+    description?: string; 
+    variant?: "default" | "destructive" 
+  };
+  
+  if (variant === 'destructive') {
+    return sonnerToast.error(title, { description, ...options });
+  }
+  
+  return sonnerToast(title, { description, ...options });
 }
 
-function toast(titleOrOptions: string | ToasterToast, options?: ExtendedToastOptions) {
-  // If first argument is a string, treat it as a title
-  if (typeof titleOrOptions === 'string') {
-    return sonnerToast(titleOrOptions, options);
-  }
-  
-  // Otherwise, use it as options object
-  const { title, description, variant, ...restOptions } = titleOrOptions;
-  
-  // Forward to sonner with appropriate options
-  if (variant === 'destructive') {
-    return sonnerToast.error(title as string, { 
-      description,
-      ...restOptions 
-    });
-  }
-  
-  return sonnerToast(title as string, { 
-    description,
-    ...restOptions
-  });
-}
+// Add convenience methods for common toast types
+toast.success = (message: string, options = {}) => sonnerToast.success(message, options);
+toast.error = (message: string, options = {}) => sonnerToast.error(message, options);
+toast.info = (message: string, options = {}) => sonnerToast.info(message, options);
+toast.warning = (message: string, options = {}) => sonnerToast.warning(message, options);
 
 // This is the hook that will be used in components
 function useToast() {
   return {
-    // Export the sonner toast function for direct use
     toast,
-    // Add convenience methods for common toast types
-    success: (message: string, options = {}) => sonnerToast.success(message, options),
-    error: (message: string, options = {}) => sonnerToast.error(message, options),
-    info: (message: string, options = {}) => sonnerToast.info(message, options),
-    warning: (message: string, options = {}) => sonnerToast.warning(message, options),
-    // Keep track of toasts for legacy compatibility
     toasts: memoryState.toasts
   }
 }

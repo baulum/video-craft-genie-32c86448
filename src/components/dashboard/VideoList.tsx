@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, Upload, Film, CheckCircle, Clock, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
+import { showToast } from "@/utils/toast-helper";
 import { VideoListActions } from "./VideoListActions";
 
 export const VideoList = () => {
@@ -34,11 +33,10 @@ export const VideoList = () => {
       setVideos(data || []);
     } catch (error) {
       console.error('Error loading videos:', error);
-      toast({
-        title: "Failed to Load Videos",
-        description: "There was an error loading your videos. Please try again.",
-        variant: "destructive",
-      });
+      showToast.error(
+        "Failed to Load Videos",
+        "There was an error loading your videos. Please try again."
+      );
     } finally {
       setLoading(false);
     }

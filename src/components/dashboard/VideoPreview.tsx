@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Scissors, RefreshCw, Download, Check, Clock, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { showToast } from "@/utils/toast-helper";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface VideoPreviewProps {
@@ -40,20 +40,18 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
           if (data.status === 'complete') {
             setProcessingStatus("success");
             setIsProcessing(false);
-            toast({
-              title: "Processing Complete",
-              description: "Your shorts have been generated successfully!",
-              variant: "default",
-            });
+            showToast.success(
+              "Processing Complete",
+              "Your shorts have been generated successfully!"
+            );
           } else if (data.status === 'error') {
             setProcessingStatus("error");
             setIsProcessing(false);
             setErrorMessage(data.error_message || "An error occurred during processing. Please try again.");
-            toast({
-              title: "Processing Failed",
-              description: data.error_message || "There was an error generating your shorts.",
-              variant: "destructive",
-            });
+            showToast.error(
+              "Processing Failed",
+              data.error_message || "There was an error generating your shorts."
+            );
           }
         }
       } catch (error) {
@@ -67,11 +65,10 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
 
   const handleGenerateShorts = async () => {
     if (!video.id) {
-      toast({
-        title: "Error",
-        description: "Video ID is missing. Please upload the video again.",
-        variant: "destructive",
-      });
+      showToast.error(
+        "Error",
+        "Video ID is missing. Please upload the video again."
+      );
       return;
     }
 
@@ -88,11 +85,10 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
         throw error;
       }
 
-      toast({
-        title: "Processing Started",
-        description: "Your video is being analyzed and shorts are being generated.",
-        variant: "default",
-      });
+      showToast.success(
+        "Processing Started",
+        "Your video is being analyzed and shorts are being generated."
+      );
       
       onStartProcessing();
     } catch (error) {
@@ -100,11 +96,10 @@ export const VideoPreview = ({ video, onStartProcessing, onNewUpload }: VideoPre
       setProcessingStatus("error");
       setIsProcessing(false);
       setErrorMessage(error instanceof Error ? error.message : "Failed to start shorts generation.");
-      toast({
-        title: "Processing Failed",
-        description: error instanceof Error ? error.message : "Failed to start shorts generation.",
-        variant: "destructive",
-      });
+      showToast.error(
+        "Processing Failed",
+        error instanceof Error ? error.message : "Failed to start shorts generation."
+      );
     }
   };
 

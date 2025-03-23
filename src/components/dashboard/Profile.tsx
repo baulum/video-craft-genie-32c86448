@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { toast } from "@/hooks/use-toast";
+import { showToast } from "@/utils/toast-helper";
 import { Upload, CheckCircle, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Textarea } from "@/components/ui/textarea";
@@ -104,17 +103,16 @@ export const Profile = () => {
         
       if (error) throw error;
       
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been successfully updated."
-      });
+      showToast.success(
+        "Profile updated",
+        "Your profile has been successfully updated."
+      );
     } catch (error) {
       console.error('Error updating profile:', error);
-      toast({
-        title: "Update failed",
-        description: "There was an error updating your profile. Please try again.",
-        variant: "destructive"
-      });
+      showToast.error(
+        "Update failed",
+        "There was an error updating your profile. Please try again."
+      );
     } finally {
       setIsLoading(false);
       setIsEditing(false);

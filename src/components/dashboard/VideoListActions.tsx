@@ -1,7 +1,6 @@
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { showToast } from "@/utils/toast-helper";
 import { MoreHorizontal, Trash2, RefreshCw, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -106,21 +105,20 @@ export const VideoListActions = ({ videoId, onDelete, onReprocess }: VideoListAc
         throw deleteError;
       }
 
-      toast({
-        title: "Video Deleted",
-        description: "The video and all associated shorts have been deleted.",
-      });
+      showToast.success(
+        "Video Deleted",
+        "The video and all associated shorts have been deleted."
+      );
       
       // Trigger parent component to update
       onDelete();
       
     } catch (error) {
       console.error('Error deleting video:', error);
-      toast({
-        title: "Delete Failed",
-        description: "There was an error deleting the video. Please try again.",
-        variant: "destructive",
-      });
+      showToast.error(
+        "Delete Failed",
+        "There was an error deleting the video. Please try again."
+      );
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);
@@ -148,21 +146,20 @@ export const VideoListActions = ({ videoId, onDelete, onReprocess }: VideoListAc
       
       if (error) throw error;
       
-      toast({
-        title: "Processing Started",
-        description: "The video is being reprocessed to generate shorts.",
-      });
+      showToast.success(
+        "Processing Started",
+        "The video is being reprocessed to generate shorts."
+      );
       
       // Trigger parent component to update
       onReprocess();
       
     } catch (error) {
       console.error('Error reprocessing video:', error);
-      toast({
-        title: "Reprocess Failed",
-        description: "There was an error reprocessing the video. Please try again.",
-        variant: "destructive",
-      });
+      showToast.error(
+        "Reprocess Failed",
+        "There was an error reprocessing the video. Please try again."
+      );
     } finally {
       setIsReprocessing(false);
     }
