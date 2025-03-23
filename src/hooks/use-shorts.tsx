@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Short } from "@/types/supabase";
-import { showToast } from "@/utils/toast-helper";
+import { toast } from "@/hooks/use-toast";
 
 export const useShorts = () => {
   const [shorts, setShorts] = useState<Short[]>([]);
@@ -27,27 +27,40 @@ export const useShorts = () => {
         return;
       }
       
-      // Instead of checking and refreshing each URL which can cause errors,
-      // let's ensure that shorts with valid data are properly displayed
-      const validShorts = data.filter(short => 
+      // Ensure all shorts have valid URLs
+      const validShorts = await Promise.all(data.map(async (short) => {
+        // If URL is missing, generate it from the file_path
+        if (!short.url && short.file_path) {
+          try {
+            const { data: publicUrlData } = supabase.storage
+              .from('shorts')
+              .getPublicUrl(short.file_path);
+            
+            short.url = publicUrlData.publicUrl;
+          } catch (err) {
+            console.error("Error generating URL for short:", err);
+          }
+        }
+        return short;
+      }));
+      
+      const filteredShorts = validShorts.filter(short => 
         short.id && (short.url || short.file_path)
       );
       
-      setShorts(validShorts);
+      setShorts(filteredShorts);
       
       // Only show success toast when shorts are loaded, not when the array is empty
-      if (validShorts.length > 0) {
-        showToast.success(
-          "Shorts Loaded",
-          `${validShorts.length} shorts retrieved successfully`
-        );
+      if (filteredShorts.length > 0) {
+        toast.success("Shorts Loaded", {
+          description: `${filteredShorts.length} shorts retrieved successfully`
+        });
       }
     } catch (error) {
       console.error("Error fetching shorts:", error);
-      showToast.error(
-        "Failed to Load Shorts",
-        error instanceof Error ? error.message : "An error occurred loading your shorts"
-      );
+      toast.error("Failed to Load Shorts", {
+        description: error instanceof Error ? error.message : "An error occurred loading your shorts"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -70,10 +83,9 @@ export const useShorts = () => {
       // Update local state
       setShorts(shorts.filter(short => short.id !== shortId));
       
-      showToast.success(
-        "Short Deleted",
-        "The short has been successfully deleted"
-      );
+      toast.success("Short Deleted", {
+        description: "The short has been successfully deleted"
+      });
       
       // Then try to delete the file if it exists (but don't block on this)
       if (shortToDelete.file_path) {
@@ -91,17 +103,18 @@ export const useShorts = () => {
       }
     } catch (error) {
       console.error("Error deleting short:", error);
-      showToast.error(
-        "Delete Failed",
-        error instanceof Error ? error.message : "Failed to delete the short"
-      );
+      toast.error("Delete Failed", {
+        description: error instanceof Error ? error.message : "Failed to delete the short"
+      });
     }
   };
 
   const handleDownload = async (short: Short) => {
     try {
       if (!short.url) {
-        showToast.error("Download Failed", "No URL available for this short");
+        toast.error("Download Failed", {
+          description: "No URL available for this short"
+        });
         return;
       }
 
@@ -113,13 +126,14 @@ export const useShorts = () => {
       a.click();
       document.body.removeChild(a);
       
-      showToast.success("Download Started", "Your short is being downloaded");
+      toast.success("Download Started", {
+        description: "Your short is being downloaded"
+      });
     } catch (error) {
       console.error("Error downloading short:", error);
-      showToast.error(
-        "Download Failed",
-        error instanceof Error ? error.message : "Failed to download the short"
-      );
+      toast.error("Download Failed", {
+        description: error instanceof Error ? error.message : "Failed to download the short"
+      });
     }
   };
 
@@ -138,20 +152,23 @@ export const useShorts = () => {
           url: shareUrl
         });
         
-        showToast.success("Shared Successfully", "Your short has been shared");
+        toast.success("Shared Successfully", {
+          description: "Your short has been shared"
+        });
       } else {
         // Fallback for browsers that don't support the Web Share API
         await navigator.clipboard.writeText(shareUrl);
-        showToast.success("Link Copied", "Short URL copied to clipboard");
+        toast.success("Link Copied", {
+          description: "Short URL copied to clipboard"
+        });
       }
     } catch (error) {
       console.error("Error sharing:", error);
       // Don't show error if user canceled the share dialog
       if (error instanceof Error && error.name !== 'AbortError') {
-        showToast.error(
-          "Share Failed", 
-          error.message
-        );
+        toast.error("Share Failed", {
+          description: error.message
+        });
       }
     }
   };

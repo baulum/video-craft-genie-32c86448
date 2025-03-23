@@ -359,10 +359,30 @@ serve(async (req) => {
           // Check if buckets exist and create them if they don't
           if (!bucketsData?.some(bucket => bucket.name === 'shorts')) {
             console.log('Creating shorts bucket...');
-            await supabaseClient.storage.createBucket('shorts', {
+            const { error: createBucketError } = await supabaseClient.storage.createBucket('shorts', {
               public: true,
               fileSizeLimit: 52428800 // 50MB limit
             });
+            
+            if (createBucketError) {
+              console.error('Error creating shorts bucket:', createBucketError);
+              throw createBucketError;
+            }
+            
+            // Add a permissive policy to allow access to the shorts bucket
+            const { error: policyError } = await supabaseClient.query(`
+              INSERT INTO storage.policies (name, bucket_id, definition)
+              VALUES (
+                'Public Access',
+                'shorts',
+                '{ "mimetype": "*" }'
+              );
+            `);
+            
+            if (policyError) {
+              console.error('Error creating bucket policy:', policyError);
+              // Continue as we might still be able to upload
+            }
           }
 
           if (!bucketsData?.some(bucket => bucket.name === 'videos')) {
@@ -384,9 +404,9 @@ serve(async (req) => {
           const segment = videoSegments[i];
           console.log(`Processing segment ${i+1}: ${segment.title}`);
           
-          // Generate file paths for this short
-          const videoFilePath = `${videoId}/short_${i + 1}.mp4`;
-          const thumbnailFilePath = `${videoId}/thumb_${i + 1}.jpg`;
+          // Generate file paths for this short - use simple path structure
+          const videoFilePath = `${videoId}_short_${i + 1}.mp4`;
+          const thumbnailFilePath = `${videoId}_thumb_${i + 1}.jpg`;
           
           try {
             // Create actual video segment and thumbnail from the original
@@ -433,20 +453,23 @@ serve(async (req) => {
                 });
             }
             
-            // Get signed URLs for the uploaded files (valid for 1 week)
-            const { data: { signedUrl: videoUrl } } = await supabaseClient.storage
+            // Get public URLs for the uploaded files
+            const videoUrl = supabaseClient.storage
               .from('shorts')
-              .createSignedUrl(videoFilePath, 604800); // 7 days in seconds
+              .getPublicUrl(videoFilePath).data.publicUrl;
               
-            const { data: { signedUrl: thumbnailUrl } } = await supabaseClient.storage
+            const thumbnailUrl = supabaseClient.storage
               .from('shorts')
-              .createSignedUrl(thumbnailFilePath, 604800); // 7 days in seconds
+              .getPublicUrl(thumbnailFilePath).data.publicUrl;
               
             if (!videoUrl || !thumbnailUrl) {
-              throw new Error("Failed to generate signed URLs for files");
+              throw new Error("Failed to generate public URLs for files");
             }
             
-            console.log(`Generated signed URLs for video and thumbnail`);
+            console.log(`Generated public URLs for video and thumbnail:`, {
+              videoUrl,
+              thumbnailUrl
+            });
             
             // Add to shorts data for database
             shortsData.push({
